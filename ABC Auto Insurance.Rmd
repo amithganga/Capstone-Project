@@ -1,0 +1,1533 @@
+---
+title: "Appendix - A"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exploratory Data Analysis
+## Environment Setup and Data import
+### Load necessary Libraries
+```{r}
+library(readxl)
+library(ggplot2)
+library(caret)
+library(corrplot)
+library(dplyr)
+library(DMwR)
+library(forcats)
+library(MASS)
+library(ROCR)
+library(blorr)
+library(randomForest)
+library(e1071)
+library(car)
+library(gbm)
+library(pscl)
+library(lmtest)
+library(rpart)
+library(RColorBrewer)
+library(rpart.plot)
+library(class)
+library(pROC)
+```
+
+#Set Working Directory
+```{r}
+
+setwd("E:\\Great Learning_BABI\\10_Capstone Project\\Car Insurance")
+
+```
+
+#Import Dataset
+```{r}
+
+auto = data.frame(read_excel("Car insurance data set.xlsx"))
+
+```
+
+#Variable Identification
+```{r}
+#Dimensions of the dataset
+dim(auto)
+
+#Top and bottom of the dataset
+head(auto)
+tail(auto)
+
+#Names of the dataset
+names(auto)
+
+#str of the dataset
+str(auto)
+
+#Summary of the dataset
+summary(auto)
+
+#Missing values 
+anyNA(auto)
+
+colSums(is.na(auto))
+
+#Convert character to Factor variables
+names = c(2,3,5,6,12,19:24,30,53,63,69,74:79,125:126)
+auto[,names] = lapply(auto[,names], factor)
+
+#Renaming Variables
+names(auto)[13:17] = c("Firstdriver_Age", "Seconddriver_Age", "Thirddriver_Age", "Fourthdriver_Age",
+                       "Fifthdriver_Age")
+names(auto)[21] = "CoveragePD"
+names(auto)[30] = "Driver_Assigned"
+names(auto)[68] = "Rental"
+names(auto)[77] = "Towing"
+names(auto)[79] = "Vehicle_Inspected"
+names(auto)[120] = "Year"
+names(auto)[121] = "Make"
+
+#Re-labeling Levels
+auto$CoverageLiability = factor(auto$CoverageLiability, labels = c("20/40/15","25/50/25","30/60/25", "30/60/25"))
+auto$CoverageMP = as.factor(ifelse(auto$CoverageMP == "None", "0","1"))
+auto$CoveragePD = as.factor(ifelse(auto$CoveragePD == "None", "0","1"))
+auto$CoveragePIP_CDW = as.factor(ifelse(auto$CoveragePIP_CDW == "None", "0","1"))
+auto$CoverageUMBI = as.factor(ifelse(auto$CoverageUMBI == "None","0", "1"))
+auto$CoverageUMPD = as.factor(ifelse(auto$CoverageUMPD == "None","0", "1"))
+auto$Rental = as.factor(ifelse(auto$Rental == "0", "0","1"))
+auto$Towing = as.factor(ifelse(auto$Towing == "0", "0","1"))
+auto$Amendment = as.factor(ifelse(auto$Amendment == "0","0","1"))
+
+```
+
+
+#Creation of new Variables
+
+```{r}
+
+#Coverage_UM
+Coverage_UM = as.integer(auto$CoverageUMBI) + as.integer(auto$CoverageUMPD)
+Coverage_UM = factor(Coverage_UM, labels = c("0","1"))
+
+auto = cbind(auto,Coverage_UM)
+
+#Engine_Size
+auto$Engine_1 = gsub("/"," ", auto$Engine_1)
+auto$Engine_1 = gsub("L","", auto$Engine_1)
+
+Engine_Size = data.frame(do.call("rbind", strsplit(as.character(auto$Engine_1), " ", fixed = T)))
+Engine_Size = Engine_Size[-2]
+Engine_Size = as.double(unlist(Engine_Size))
+
+Engine_Size = ifelse(Engine_Size>10, Engine_Size/61.01, Engine_Size/1)
+
+auto = cbind(auto, Engine_Size)
+
+#Total_Surcharge
+auto$Surcharge1Unit_1 = ifelse(auto$Surcharge1Unit_1 == "N",0,1)
+auto$Surcharge2Unit_1 = ifelse(auto$Surcharge2Unit_1 == "N",0,1)
+auto$Surcharge3Unit_1 = ifelse(auto$Surcharge3Unit_1 == "N",0,1)
+
+auto$Total_Surcharge = auto$Surcharge1Unit_1 + auto$Surcharge2Unit_1 + auto$Surcharge3Unit_1
+
+auto$Total_Surcharge = as.factor(auto$Total_Surcharge)
+
+#Make renaming levels for Make
+auto$Make[auto$Make == "Acura"] = "ACURA"
+auto$Make[auto$Make == "Bmw"] = "BMW"
+auto$Make[auto$Make == "BUIC" | auto$Make == "Buick"] = "BUICK"
+auto$Make[auto$Make == "CADDY" | auto$Make == "CADILLAC"] = "Cadillac"
+auto$Make[auto$Make == "Chev" | auto$Make == "CHEV" | auto$Make == "Cheverlet" | 
+            auto$Make == "Chevorlet" | auto$Make == "CHEVORLET" | auto$Make == "CHEVROET" 
+          | auto$Make == "Cheverolet" | auto$Make == "CHEVROLET" | auto$Make == "Chevrolet`" 
+          | auto$Make == "Chevroletq" | auto$Make == "Chevy" | auto$Make == "CHEVY" | auto$Make == "CHEVYVAN"] = "Chevrolet"
+
+auto$Make[auto$Make == "CHRYLER" | auto$Make == "CHRYSLER" | 
+            auto$Make == "CHRSLR" | auto$Make == "CHRYSLR"] = "Chrysler"
+auto$Make[auto$Make == "DAEWOO" | auto$Make == "DAEWOOD"] =  "Daewood"
+auto$Make[auto$Make == "DODGE"] = "Dodge"
+auto$Make[auto$Make == "FORD" | auto$Make == "FORED" | auto$Make == "FORK" ] = "Ford"
+auto$Make[auto$Make == "G.M.C" | auto$Make == "GeneralMo" 
+          | auto$Make == "GEO" | auto$Make == "GMA" | auto$Make == "Gmc"] = "GMC"
+auto$Make[auto$Make == "HONDA"] = "Honda"
+auto$Make[auto$Make == "HUMDAI" | auto$Make == "HUNDAI" | auto$Make == "HYANDI" 
+          | auto$Make == "Hyndai" | auto$Make == "HYUDAI" |
+       auto$Make == "HUNDAI" | auto$Make == "HYUNDAI" | auto$Make == "HYUNDIA" | auto$Make == "HYUNDY"] = "Hyundai"
+auto$Make[auto$Make == "INFINIT" | auto$Make == "INFINITI"] = "Infiniti"
+auto$Make[auto$Make == "DATS" | auto$Make == "Daewood"] = "Daewoo"
+auto$Make[auto$Make == "AMG"] = "Acura"
+auto$Make[auto$Make == "EAGLE"] = "Ford"
+auto$Make[auto$Make == "Hundai"] = "Hyundai"
+auto$Make[auto$Make == "ISUZI" | auto$Make == "ISUZU" | auto$Make == "Izusu"] = "Isuzu"
+auto$Make[auto$Make == "JEEP" | auto$Make == "JEEPAMGC" ] = "JEEP"
+auto$Make[auto$Make == "JEEP"] = "Jeep"
+auto$Make[auto$Make == "JAGUAR"] = "Jaguar"
+auto$Make[auto$Make == "KIA" | auto$Make == "KIAMotors" ] = "Kia"
+auto$Make[auto$Make == "LANDROVER" | auto$Make == "LEXUS" ] = "Lexus"
+auto$Make[auto$Make == "Merc" | auto$Make == "MERCEDE" 
+          | auto$Make == "MERCEDES" | auto$Make == "Mercedes-b" | auto$Make == "MERCEDESB"] = "Mercedes"
+auto$Make[auto$Make == "LINC" | auto$Make == "LINCOLN" | auto$Make == "LINCON"] = "Lincoln"
+auto$Make[auto$Make == "MAZDA"] = "Mazda"
+auto$Make[auto$Make == "MERCURY"] = "Mercury"
+auto$Make[auto$Make == "MINI" | auto$Make == "MITS" 
+          | auto$Make == "MITSUBI" | auto$Make == "MITSUBISHI"] = "Mitsubishi"
+auto$Make[auto$Make == "NISS" | auto$Make == "NISSAN"] = "Nissan"
+auto$Make[auto$Make == "CUTLASS" | auto$Make == "Olds" | 
+            auto$Make == "OLDS" | auto$Make == "OLDSMOBILE"] = "Oldsmobile"
+auto$Make[auto$Make == "NON-OWNERS" | auto$Make == "Non-Owners"] = "No-Owners"
+auto$Make[auto$Make == "PICKUP"] = "Oldsmobile"
+auto$Make[auto$Make == "KiaMotors"] = "Kia"
+auto$Make[auto$Make == "PLYM" | auto$Make == "PLYMOUT" | auto$Make == "PLYMOUTH" | auto$Make == "PLYMT"] = "Plymouth"
+auto$Make[auto$Make == "PONT" | auto$Make == "PONTIAC" | auto$Make == "Pontic"] = "Pontiac"
+
+auto$Make[auto$Make == "SATURN"] = "Saturn"
+auto$Make[auto$Make == "Volk" | auto$Make == "Volks" | auto$Make == "VOLKSWAGEN"] = "Volkswagen"
+auto$Make[auto$Make == "SUBARU"] = "Subaru"
+auto$Make[auto$Make == "SUZUKI"] = "Suzuki"
+auto$Make[auto$Make == "VOLVO"] = "Volvo"
+auto$Make[auto$Make == "TOYOTA"] = "Toyota"
+
+
+#Renaming Brand
+auto$Make[auto$Make == "ACURA" | auto$Make == "Honda"] = "HONDA"
+auto$Make[auto$Make == "AUDI" | auto$Make == "PORSCHE" | auto$Make == "Van" 
+          | auto$Make == "Volkswagen"] = "VOLKSWAGEN"
+auto$Make[auto$Make == "BUICK" | auto$Make == "Cadillac" | auto$Make == "chevrolet" 
+          | auto$Make == "Daewoo" | auto$Make == "GMC" | auto$Make == "HUMMER" | 
+            auto$Make == "Saturn" | auto$Make == "Oldsmobile" 
+          | auto$Make == "Pontiac" |auto$Make == "SAAB"] = "GM"
+
+auto$Make[auto$Make == "Dodge" | auto$Make == "Jeep" | 
+       auto$Make == "Plymouth" | auto$Make == "VW" | auto$Make == "Wrangler" | auto$Make == "Chrysler"] = "CHRYSLER"
+auto$Make[auto$Make == "Infiniti" | auto$Make == "Nissan"] = "NISSAN"
+auto$Make[auto$Make == "SCION" | auto$Make == "Lexus" | auto$Make == "Subaru" | auto$Make == "Toyota"] = "TOYOTA"
+auto$Make[auto$Make == "Kia" | auto$Make == "Mazda" | auto$Make == 'Hyundai'] = "HYUNDAI"
+auto$Make[auto$Make == "Lincoln" | auto$Make == "Ford" | auto$Make == "Mercury"] = "FORD"
+auto$Make[auto$Make == "Isuzu"] = "Mitsubishi"
+
+auto$Make[auto$Make == "Acura"] = "HONDA"
+
+auto$Make = as.factor(auto$Make)
+
+#Removing Unwanted Variables
+auto.new = auto[,-c(1,7:11,16:17,20,23:52,54:67,70:76,80:119,122:123,127)]
+
+#Re-ordering Variables
+#auto.new = auto.new[, c(1:12,24:25,13:15,26,16:23)]
+
+
+```
+
+
+#Outlier Treatment
+
+```{r}
+
+#Function to cap outliers with 1st & 99th quartile values
+
+fun <- function(x){
+    quantiles <- quantile( x, c(.01, .99 ), na.rm = T )
+    x[ x < quantiles[1] ] <- quantiles[1]
+    x[ x > quantiles[2] ] <- quantiles[2]
+    x
+}
+
+auto.new$Premium = fun(auto.new$Premium)
+auto.new$Firstdriver_Age = fun(auto.new$Firstdriver_Age)
+auto.new$Seconddriver_Age = fun(auto.new$Seconddriver_Age)
+auto.new$Engine_Size = fun(auto.new$Engine_Size)
+auto.new$Year = fun(auto.new$Year)
+auto.new$Total_Distance_To_Work = fun(auto$Total_Distance_To_Work)
+
+
+```
+
+
+#Missing Value Treatment
+```{r}
+
+auto.new$Make = fct_explicit_na(auto.new$Make, na_level = "No-Owners")
+
+auto.new = knnImputation(data = auto.new, k = 10)
+
+anyNA(auto.new)
+```
+
+
+#Univariate Analysis
+```{r}
+
+#Univariate Analysis for continuous variables
+num = sapply(auto.new, is.numeric)
+auto.num = auto.new[,num]
+
+par(mfrow = c(3,3))
+for (i in names(auto.num)) {
+  hist(auto.num[[i]], main = names(auto.num[i]), xlab = "")
+  
+} 
+
+#Categorical Variables
+cat = sapply(auto.new, is.factor)
+auto.cat = auto.new[,cat]
+
+par(mfrow = c(4,6))
+for (i in names(auto.cat)) {
+  print(table(auto.cat[i]))
+  barplot(table(auto.cat[i]), main = names(auto.cat[i]))
+  
+}
+```
+
+
+#Bivariate Analysis
+
+```{r}
+
+#Bivariate analysis of Claim Status with numerical variables
+my.cols = brewer.pal(n = 3,"Set1")
+my.cols = c("#377EB8","#E41A1C")
+
+ggplot(auto.new, aes(x = ClaimStatus, y = Premium)) + geom_boxplot(aes(fill = ClaimStatus)) + ggtitle(label = "Relationship between Claim Status and Premium") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = ClaimStatus, y = Firstdriver_Age)) + geom_boxplot(aes(fill = ClaimStatus)) + ggtitle(label = "Relationship between Claim Status and First Driver Age") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = ClaimStatus, y = Seconddriver_Age)) + geom_boxplot(aes(fill = ClaimStatus)) + ggtitle(label = "Relationship between Claim Status and Second Driver Age") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = ClaimStatus, y = Year)) + geom_boxplot(aes(fill = ClaimStatus)) + ggtitle(label = "Relationship between Claim Status and year") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = ClaimStatus, y = Total_Distance_To_Work)) + geom_boxplot(aes(fill = ClaimStatus)) + ggtitle(label = "Relationship between Claim Status and Distance to Work") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = ClaimStatus, y = Engine_Size)) + geom_boxplot(aes(fill = ClaimStatus)) + ggtitle(label = "Relationship between Claim Status and Engine Size") + scale_fill_manual(values = my.cols)
+
+
+#Claim Status with all categorical Values
+par(mfrow = c(4,6))
+for(i in names(auto.cat)){
+  print(table(auto.cat$ClaimStatus, auto.cat[[i]]))
+  barplot(table(auto.cat$ClaimStatus, auto.cat[[i]]), main = names(auto.cat[i]), col = c("grey","red"))
+}
+
+#Bivariate analysis of Renewed with numerical variables
+my.cols = brewer.pal(n = 12,"Paired")
+my.cols = c("#FF7F00","#6A3D9A")
+
+ggplot(auto.new, aes(x = Renewed, y = Premium)) + geom_boxplot(aes(fill = Renewed)) + ggtitle(label = "Relationship between Renewed and Premium") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = Renewed, y = Firstdriver_Age)) + geom_boxplot(aes(fill = Renewed)) + ggtitle(label = "Relationship between Renewed and First Driver Age") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = Renewed, y = Seconddriver_Age)) + geom_boxplot(aes(fill = Renewed)) + ggtitle(label = "Relationship between Renewed and Second Driver Age") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = Renewed, y = Year)) + geom_boxplot(aes(fill = Renewed)) + ggtitle(label = "Relationship between Renewed and year") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = Renewed, y = Total_Distance_To_Work)) + geom_boxplot(aes(fill = Renewed)) + ggtitle(label = "Relationship between Renewed and Distance to Work") + scale_fill_manual(values = my.cols)
+ggplot(auto.new, aes(x = Renewed, y = Engine_Size)) + geom_boxplot(aes(fill = Renewed)) + ggtitle(label = "Relationship between Renewed and Engine Size") + scale_fill_manual(values = my.cols)
+
+#Renewed with all categorical Values
+par(mfrow = c(4,6))
+for(i in names(auto.cat)){
+  print(table(auto.cat$Renewed, auto.cat[[i]]))
+  barplot(table(auto.cat$Renewed, auto.cat[[i]]), main = names(auto.cat[i]), col = c("grey","red"))
+}
+
+#Correlation between Numerical variables
+corrplot(corr = cor(auto.num), method = "number")
+
+```
+
+#Other EDA Insights
+```{r}
+
+#Make & Engine Size 
+ggplot(auto.new, aes(x = Make, y = Engine_Size)) + geom_boxplot(aes(fill = ClaimStatus)) + coord_flip()
+ggplot(auto.new, aes(x = Make, y = Engine_Size)) + geom_boxplot(aes(fill = Renewed)) + coord_flip()
+
+##Ford & Chrysler have most claims 
+
+#Billing Term & Premium  - Claims & Renewals
+ggplot(auto.new, aes(x = Billing_Term, y = Premium)) + geom_boxplot(aes(fill = ClaimStatus)) + coord_flip()
+ggplot(auto.new, aes(x = Billing_Term, y = Premium)) + geom_boxplot(aes(fill = Renewed)) + coord_flip()
+
+#Units & Premiums
+ggplot(auto.new, aes(x = Units, y = Premium)) + geom_boxplot(aes(fill = ClaimStatus)) + coord_flip()
+ggplot(auto.new, aes(x = Units, y = Premium)) + geom_boxplot(aes(fill = Renewed)) + coord_flip()
+
+#Amendment
+ggplot(auto.new, aes(x = Amendment, y = Premium)) + geom_boxplot(aes(fill = ClaimStatus)) + coord_flip()
+ggplot(auto.new, aes(x = Amendment, y = Premium)) + geom_boxplot(aes(fill = Renewed)) + coord_flip()
+
+#Type
+ggplot(auto.new, aes(x = Type, y = Premium)) + geom_boxplot(aes(fill = ClaimStatus)) + coord_flip()
+ggplot(auto.new, aes(x = Type, y = Premium)) + geom_boxplot(aes(fill = Renewed)) + coord_flip()
+
+```
+
+#Reducing Factor levels for variables
+```{r}
+#Reducing Levels 
+auto.new$Number_of_Driver = factor(auto.new$Number_of_Driver, labels = c("1","2",">2",">2",">2"))
+auto.new$Total_Surcharge = factor(auto.new$Total_Surcharge, labels = c("0","1","1","1"))
+auto.new$Type = factor(auto.new$Type, labels = c("A", "Others", "DP", "Others", "P", "REN", "Others", "Others", "XFR"))
+auto.new$Make = factor(auto.new$Make, labels = c("Others", "Chevrolet", "Chrysler", "Ford", "GM",
+                                                 "Others","Others", "Others",
+                                                 "Others", "Others", "Others", "Others", "Others", 
+                                                 "Others", "Others", "Others"
+                                                 ))
+
+```
+
+
+#Creating Dummy Variables
+```{r}
+
+#Billing Term
+auto.new$Billing_Term_3 = as.factor(ifelse(auto.new$Billing_Term == "3", "1", "0"))
+auto.new$Billing_Term_6 = as.factor(ifelse(auto.new$Billing_Term == "6", "1", "0"))
+
+#Number of Drivers
+auto.new$Number_of_Driver_1 = as.factor(ifelse(auto.new$Number_of_Driver == "1", "1", "0"))
+auto.new$Number_of_Driver_2 = as.factor(ifelse(auto.new$Number_of_Driver == "2", "1", "0"))
+
+#CoverageLiability
+auto.new$CoverageLiability_20_40_15 = as.factor(ifelse(auto.new$CoverageLiability == "20/40/15", "1", "0"))
+auto.new$CoverageLiability_25_50_25 = as.factor(ifelse(auto.new$CoverageLiability == "25/50/25", "1", "0"))
+
+#Units
+auto.new$Units_1 = as.factor(ifelse(auto.new$Units == "1", "1", "0"))
+auto.new$Units_2 = as.factor(ifelse(auto.new$Units == "2", "1", "0"))
+auto.new$Units_3 = as.factor(ifelse(auto.new$Units == "3", "1", "0"))
+auto.new$Units_4 = as.factor(ifelse(auto.new$Units == "4", "1", "0"))
+
+#Type
+auto.new$Type_A = as.factor(ifelse(auto.new$Type == "A", "1", "0"))
+auto.new$Type_DP = as.factor(ifelse(auto.new$Type == "DP", "1", "0"))
+auto.new$Type_P = as.factor(ifelse(auto.new$Type == "P", "1", "0"))
+auto.new$Type_REN = as.factor(ifelse(auto.new$Type == "REN", "1", "0"))
+auto.new$Type_XFR = as.factor(ifelse(auto.new$Type == "XFR", "1", "0"))
+
+#Make
+auto.new$Make_Che = as.factor(ifelse(auto.new$Make == "Chevrolet", 1, 0))
+auto.new$Make_Chr = as.factor(ifelse(auto.new$Make == "Chrysler", 1, 0))
+auto.new$Make_For = as.factor(ifelse(auto.new$Make == "Ford", 1, 0))
+auto.new$Make_GM = as.factor(ifelse(auto.new$Make == "GM", 1, 0))
+
+#Removing variables for which dummy variables created as well as ClaimFrequency since variable 
+#explains ClaimStatus and is redundant
+auto.new = auto.new[,-c(2,4,6,11,18,21,24)]
+names(auto.new)
+
+```
+
+#Applying Smote
+```{r}
+
+#Splitting data into train and test
+set.seed(123)
+index = sample(1:nrow(auto.new), nrow(auto.new) * 0.70)
+train = auto.new[index,]
+test  = auto.new[-index,]
+
+train.smote = SMOTE(ClaimStatus~., train, perc.over = 100, k = 5, perc.under = 800)
+
+#ClaimStatus distribution proportion
+prop.table(table(auto.new$ClaimStatus))
+prop.table(table(train$ClaimStatus))
+prop.table(table(test$ClaimStatus))
+prop.table(table(train.smote$ClaimStatus))
+
+#Renewed distribution proportion
+prop.table(table(auto.new$Renewed))
+prop.table(table(train$Renewed))
+prop.table(table(test$Renewed))
+
+```
+
+#Model Building - ClaimStatus
+#Logistic Regression Model
+```{r}
+
+#Building initial logistic model
+mod = glm(ClaimStatus~., data = train.smote, family = "binomial")
+
+summary(mod)
+
+vif(mod)
+
+#Building model with only significant variables
+mod = glm(ClaimStatus ~ Premium + Renewed + Thirddriver_Age + Amendment + CoveragePD + Rental + Sex_1 +
+            Towing + Vehicle_Inspected + Coverage_UM + Billing_Term_3 + Total_Surcharge +
+            CoverageLiability_25_50_25 + Units_1 + Units_2 + Units_3 + Units_4 + Type_DP +
+            Type_P + Type_XFR, data = train.smote, family = "binomial")
+
+summary(mod)
+vif(mod)
+
+#Building Final Model
+final.mod = glm(ClaimStatus ~ Premium + Renewed + Thirddriver_Age + Amendment + CoveragePD + Rental + Sex_1 +
+            Towing + Vehicle_Inspected + Coverage_UM + Billing_Term_3 + Total_Surcharge +
+            CoverageLiability_25_50_25 + Units_2 + Units_3 + Units_4 + Type_DP +
+            Type_P + Type_XFR, data = train.smote, family = "binomial")
+
+summary(final.mod)
+vif(final.mod)
+
+
+#Loglikelihood test : To ensure if logit model is valid or not
+lrtest(final.mod)
+
+#To get the logit R2 of goodness - Model is robust
+pR2(final.mod)
+
+#Getting the Odds and probability values
+odds = exp(coef(final.mod))
+odds
+
+prob = odds/(1+odds)
+prob
+
+relativeImportance=(odds[-1]/sum(odds[-1]))*100
+relativeImportance[order(relativeImportance)]
+
+#Training data performance measurements
+#Confusion Matrix
+predtrain = predict(object = final.mod, newdata = train.smote, type = "response")
+blr_confusion_matrix(model = final.mod, cutoff = 0.15, data = train.smote) 
+
+#KS
+K = blr_gains_table(final.mod, data = train.smote)
+plot(K)
+
+blr_ks_chart(K, title = "KS Chart Training Data",
+             yaxis_title = " ",xaxis_title = "Cumulative Population %",
+             ks_line_color = "black")
+
+
+#Gini 
+blr_gini_index(final.mod, data = train.smote)
+
+#AUC 
+ROCRpredTrain = prediction(predtrain, train.smote$ClaimStatus)
+auctrain = as.numeric(performance(ROCRpredTrain, "auc")@y.values)
+auctrain
+perftrain = performance(ROCRpredTrain, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+#Performance on test dataset
+#Confusion Matrix
+predtest= predict(object = final.mod, newdata = test, type = "response")
+blr_confusion_matrix(model = final.mod, cutoff = 0.15, data = test) 
+
+#KS
+K.test = blr_gains_table(final.mod, data = test)
+plot(K.test)
+
+blr_ks_chart(K.test, title = "KS Chart Testing Data",
+             yaxis_title = " ",xaxis_title = "Cumulative Population %",
+             ks_line_color = "black")
+
+#Gini 
+blr_gini_index(final.mod, data = test)
+
+#AUC 
+ROCRpredTest = prediction(predtest, test$ClaimStatus)
+auctest = as.numeric(performance(ROCRpredTest, "auc")@y.values)
+auctest
+perftrain = performance(ROCRpredTest, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+```
+
+
+#Decision Tree
+```{r}
+
+#Building Decision Tree
+set.seed(100)
+tree = rpart(ClaimStatus~., data = train.smote, method = "class", cp = 0, minbucket = 10)
+
+#Print Tree
+print(tree)
+rpart.plot(tree)
+
+#Print cp
+printcp(tree)
+
+which.min(tree$cptable[,"xerror"])
+
+#Pruned Tree
+ptree = prune(tree, cp = 0.00141243, "CP")
+
+rpart.plot(ptree)
+
+print(ptree)
+
+#Prediction on Training Data
+predtrain.DT = predict(object = ptree, newdata = train.smote, type = "class")
+predtrain.score = predict(object = ptree, newdata = train.smote, type = "prob")[,"1"]
+
+#Prediction on Testing Data
+predtest.DT = predict(object = ptree, newdata = test, type = "class")
+predtest.score = predict(object = ptree, newdata = test, type = "prob")[,"1"]
+
+#Performance Measures on Training & Testing Data
+confusionMatrix(predtrain.DT, train.smote$ClaimStatus, positive = "1")
+confusionMatrix(predtest.DT, test$ClaimStatus, positive = "1")
+
+#ROCR curve & AUC
+ROCRpredTrain.DT = prediction(predtrain.score, train.smote$ClaimStatus)
+auctrain.DT = as.numeric(performance(ROCRpredTrain.DT, "auc")@y.values)
+auctrain.DT
+perftrain = performance(ROCRpredTrain.DT, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+ROCRpredTest.DT = prediction(predtest.score, test$ClaimStatus)
+auctest.DT = as.numeric(performance(ROCRpredTest.DT, "auc")@y.values)
+auctest.DT
+perftest = performance(ROCRpredTest.DT, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.DT = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.DT
+
+ks.Test.DT = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.DT
+
+#Gini
+Gini.Train.DT = ineq::ineq(predtrain.DT, "gini")
+Gini.Train.DT
+
+Gini.Test.DT = ineq::ineq(predtest.DT, "gini")
+Gini.Test.DT
+
+
+```
+
+#Random Forest
+```{r}
+
+#Building Random Forest 
+Rforest = randomForest(ClaimStatus~., data = train.smote, ntree = 501, mtry = 3, nodesize = 10, importance = T)
+
+#Print 
+print(Rforest)
+
+#Plot RF to know optimum no of trees
+plot(Rforest)
+
+#Tuning RF
+set.seed(1000)
+tRforest = tuneRF(x = train.smote[-1], y = train.smote$ClaimStatus, mtryStart = 3, ntreeTry = 100, 
+                  stepFactor = 1.5, improve = 0.0001, nodesize = 10, trace = T, plot = T, 
+                  doBest = T, importance = T)
+
+                  
+#Rebuilding model using tuning parameters
+
+Rforest = randomForest(formula = ClaimStatus~., data = train.smote, ntree = 100, mtry = 6, 
+                       nodesize = 10, importance = T )
+
+
+
+##Use this tree to do the prediction on train as well as test data set
+predtrain.RF= predict(object = Rforest, newdata = train.smote, type = "class")
+predtrainRF.score = predict(object = Rforest, newdata = train.smote, type = "prob")[,"1"]
+
+predtest.RF = predict(object = Rforest, newdata = test, type = "class")
+predtestRF.score = predict(object = Rforest, newdata = test, type = "prob")[,"1"]
+
+#Performance Measures on Train & Testing data
+confusionMatrix(predtrain.RF, train.smote$ClaimStatus, positive = "1")
+confusionMatrix(predtest.RF, test$ClaimStatus, positive = "1")
+
+#ROCR Curve & AUC
+ROCRpredTrain.RF = prediction(predtrainRF.score, train.smote$ClaimStatus)
+auctrain.RF = as.numeric(performance(ROCRpredTrain.RF, "auc")@y.values)
+auctrain.RF
+perftrain = performance(ROCRpredTrain.RF, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+ROCRpredTest.RF = prediction(predtestRF.score, test$ClaimStatus)
+auctest.RF = as.numeric(performance(ROCRpredTest.RF, "auc")@y.values)
+auctest.RF
+perftest = performance(ROCRpredTest.RF, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.RF = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.RF
+
+ks.Test.RF = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.RF
+
+#Gini
+Gini.Train.RF = ineq::ineq(predtrain.RF, "gini")
+Gini.Train.RF
+
+Gini.Test.RF = ineq::ineq(predtest.RF, "gini")
+Gini.Test.RF
+
+```
+
+##Naive Bayes
+```{r}
+
+
+#Building naive bayes model
+naive_Claims = naiveBayes(ClaimStatus~., data = train.smote, usekernel = T)
+
+naive_Claims
+
+#Predicting using Train & Test
+predtrain.NB = predict(naive_Claims, train.smote, type="class")
+predtest.NB = predict(naive_Claims, test,type="class")
+
+# Confusion Matrix - train data & test data 
+confusionMatrix(predtrain.NB, train.smote$ClaimStatus,positive = "1")
+confusionMatrix(predtest.NB, test$ClaimStatus,positive = "1")
+
+#Performance measures on Training & Test sets
+#ROCR Curve & AUC
+predvec = ifelse(predtrain.NB=="1", 1, 0)
+realvec = ifelse(train.smote$ClaimStatus=="1", 1, 0)
+pred <- prediction(predvec,realvec)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+plot(perf, main = "ROC curve for Naive Bayes Classifier",col = "blue", lwd = 3)
+abline(a = 0, b = 1, lwd = 2, lty = 2)
+
+perf.auc <- performance(pred, measure = "auc")
+unlist(perf.auc@y.values)
+
+
+predvec.test = ifelse(predtest.NB=="1", 1, 0)
+realvec.test = ifelse(test$ClaimStatus=="1", 1, 0)
+pred.test = prediction(predvec.test,realvec.test)
+perf.test = performance(pred.test, measure = "tpr", x.measure = "fpr")
+plot(perf.test, main = "ROC curve for Naive Bayes Classifier",col = "blue", lwd = 3)
+abline(a = 0, b = 1, lwd = 2, lty = 2)
+
+perf.auc.test <- performance(pred.test, measure = "auc")
+unlist(perf.auc.test@y.values)
+
+perftrain = performance(pred, "tpr","fpr")
+perftest = performance(pred.test, "tpr", "fpr")
+
+#KS
+ks.Train.NB = max(unlist(perftrain@y.values[[1]]) - unlist(perftrain@x.values))
+ks.Train.NB
+
+ks.Test.NB = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.NB
+
+#Gini
+Gini.Train.NB = ineq::ineq(predtrain.NB, "gini")
+Gini.Train.NB
+
+Gini.Test.NB = ineq::ineq(predtest.NB, "gini")
+Gini.Test.NB
+
+
+# #To get important variables
+# x = train.smote[-1]
+# y = train.smote$ClaimStatus
+# 
+# mod = train(ClaimStatus ~., data = train.smote, trControl = trainControl(method = "cv", number = 10),
+#             method = "nb", preProc = c("center", "scale"))
+# 
+# varImp(mod)
+
+```
+
+#KNN 
+```{r}
+
+train.new = train.smote
+test.new = test
+
+train.new$MaritalStatus_1 = as.factor(ifelse(train.new$MaritalStatus_1 == "M", "1", "0"))
+test.new$MaritalStatus_1 = as.factor(ifelse(test.new$MaritalStatus_1 == "M", "1", "0"))
+
+train.new$Sex_1 = as.factor(ifelse(train.new$Sex_1 == "M", "1", "0"))
+test.new$Sex_1 = as.factor(ifelse(test.new$Sex_1 == "M", "1", "0"))
+
+#Normalize variables
+scale = preProcess(train.new, method = "range")
+
+train.norm.data = predict(scale, train.new)
+test.norm.data = predict(scale, test.new)
+
+
+#Removing factor variable from train & test datasets
+trainKNN = train.norm.data[-1]
+testKNN = test.norm.data[-1]
+
+#Storing target variable for testing and training data
+trainKNN.Label = train.norm.data$ClaimStatus
+testKNN.Label = test.norm.data$ClaimStatus
+
+#Model
+knn_fit3 = knn(train = trainKNN, test = testKNN, cl = trainKNN.Label, k = 3, prob = T)
+Knn.tab3 = table(knn_fit3, testKNN.Label)
+Knn.tab3
+(3827+61)/nrow(test.norm.data) #91.3
+(61/(186+61)) #24.2
+(3827/(3827+180))
+
+knn_fit5 = knn(train = trainKNN, test = testKNN, cl = trainKNN.Label, k = 5, prob = F)
+Knn.tab5 = table(knn_fit5, testKNN.Label)
+Knn.tab5
+(3906+48)/nrow(test.norm.data) #92.9
+(48/(199+48)) #19.4
+
+#ROCR & AUC
+prob = attr(knn_fit3, "prob")
+prob = 2*ifelse(knn_fit3 == "-1", 1-prob, prob) - 1
+
+pred_knn = prediction(prob, testKNN.Label)
+pred_knn = performance(pred_knn, "tpr","fpr")
+plot(pred_knn, avg= "threshold", colorize=T, lwd=3, main= "ROC curve")
+
+
+```
+
+#Bagging Model
+```{r}
+
+library(ipred)
+set.seed(400)
+claims.bagging = bagging(ClaimStatus~., data = train.smote, 
+                       control=rpart.control(maxdepth=5, minsplit=4), importance = T, method = "treebag")
+
+summary(claims.bagging)
+
+#Prediction on train 
+baggingpred.train = predict(object = claims.bagging, train.smote)
+predtrainbagging.score = predict(object = claims.bagging, newdata = train.smote, type = "prob")[,"1"]
+
+confusionMatrix(baggingpred.train, train.smote$ClaimStatus, positive = "1") #93.9
+
+#Prediction on test
+baggingpred.test = predict(object = claims.bagging, test)
+predtestbagging.score = predict(object = claims.bagging, newdata = test, type = "prob")[,"1"]
+
+confusionMatrix(baggingpred.test, test$ClaimStatus, positive = "1") 
+
+#Important Variables
+varImp(object = claims.bagging)
+
+#ROCR Curve & AUC
+ROCRpredTrain.Bag = prediction(predtrainbagging.score, train.smote$ClaimStatus)
+auctrain.Bag = as.numeric(performance(ROCRpredTrain.Bag, "auc")@y.values)
+auctrain.Bag
+perftrain = performance(ROCRpredTrain.Bag, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+ROCRpredTest.Bag = prediction(predtestbagging.score, test$ClaimStatus)
+auctest.Bag = as.numeric(performance(ROCRpredTest.Bag, "auc")@y.values)
+auctest.Bag
+perftest = performance(ROCRpredTest.Bag, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.Bag = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.Bag
+
+ks.Test.Bag = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.Bag
+
+#Gini
+Gini.Train.Bag = ineq::ineq(baggingpred.train, "gini")
+Gini.Train.Bag
+
+Gini.Test.Bag = ineq::ineq(baggingpred.test, "gini")
+Gini.Test.Bag
+
+```
+
+#Boosting
+```{r}
+
+#Building model using Gradient boosting
+GBM.train = train.smote
+GBM.test  = test
+GBM.train$ClaimStatus = as.numeric(GBM.train$ClaimStatus)-1
+
+set.seed(100)
+claims.boosting = gbm(formula = ClaimStatus~., distribution = "bernoulli", data = GBM.train,
+                    n.trees = 100, interaction.depth = 10, shrinkage = 0.1,
+                    cv.folds = 5, verbose = F, n.cores = NULL)
+
+summary(claims.boosting)
+
+#Prediction on train 
+boostingpred.train = predict(object = claims.boosting, GBM.train, type = "response", n.trees = 100)
+boostingpred.train = as.factor(ifelse(boostingpred.train>0.1,1,0))
+confusionMatrix(boostingpred.train, as.factor(GBM.train$ClaimStatus), positive = "1") 
+
+#Prediction on test
+boostingpred.test = predict(object = claims.boosting, GBM.test, type = "response", n.trees = 100)
+boostingpred.test = as.factor(ifelse(boostingpred.test>0.1,1,0))
+confusionMatrix(boostingpred.test, as.factor(GBM.test$ClaimStatus), positive = "1") 
+
+#Other Performance Measures
+#Auc
+boostingpred.train = predict(object = claims.boosting, GBM.train, type = "response", n.trees = 100)
+ROCRpredTrain.boosting = prediction(boostingpred.train, GBM.train$ClaimStatus)
+auctrain = as.numeric(performance(ROCRpredTrain.boosting, "auc")@y.values) 
+auctrain
+perftrain = performance(ROCRpredTrain.boosting, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+boostingpred.test = predict(object = claims.boosting, GBM.test, type = "response", n.trees = 100)
+ROCRpredTest.boosting = prediction(boostingpred.test, GBM.test$ClaimStatus)
+auctest = as.numeric(performance(ROCRpredTest.boosting, "auc")@y.values) 
+auctest
+perftest = performance(ROCRpredTest.boosting, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.Boosting = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.Boosting
+
+ks.Test.Boosting = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.Boosting
+
+#Gini
+Gini.Train.Boosting = ineq::ineq(boostingpred.train, "gini")
+Gini.Train.Boosting
+
+Gini.Test.Boosting = ineq::ineq(boostingpred.test, "gini")
+Gini.Test.Boosting
+
+
+```
+
+#XGBoosting
+```{r}
+
+#Tuning boosting model using XGboosting
+library(xgboost)
+labels = train.smote$ClaimStatus
+ts_label = test$ClaimStatus
+
+new_tr = model.matrix(~.+0, data = train.smote[,-1])
+new_ts = model.matrix(~.+0, data = test[,-1])
+
+labels = as.numeric(labels) - 1
+ts_label = as.numeric(ts_label) - 1
+
+dtrain = xgb.DMatrix(data = new_tr, label = labels)
+dtest = xgb.DMatrix(data = new_ts, label = ts_label)
+
+
+xgb.fit = xgboost(data = dtrain, eta = 1, 
+                  max_depth = 15, min_child_weight = 3, nrounds = 1000, nfold = 5,
+                  objective = "binary:logistic", verbose = 0, early_stopping_rounds = 10)
+
+
+#Confusion Matrix
+XGBoosting.predtrain = predict(object = xgb.fit, dtrain)
+XGBoosting.predtrain = as.factor(ifelse(XGBoosting.predtrain>0.1,1,0))
+confusionMatrix(XGBoosting.predtrain, train.smote$ClaimStatus)
+
+XGBoosting.predtest = predict(object = xgb.fit, dtest)
+XGBoosting.predtest = as.factor(ifelse(XGBoosting.predtest>0.1,1,0))
+confusionMatrix(XGBoosting.predtest, test$ClaimStatus)
+
+#Other Performance Measures
+#Auc
+XGBoosting.predtrain = predict(object = xgb.fit, dtrain)
+ROCRpredTrain.boosting = prediction(XGBoosting.predtrain, train.smote$ClaimStatus)
+auctrain = as.numeric(performance(ROCRpredTrain.boosting, "auc")@y.values) 
+auctrain
+perftrain = performance(ROCRpredTrain.boosting, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+XGBoosting.predtest = predict(object = xgb.fit, dtest)
+ROCRpredTest.boosting = prediction(XGBoosting.predtest, test$ClaimStatus)
+auctest = as.numeric(performance(ROCRpredTest.boosting, "auc")@y.values) 
+auctest
+perftest = performance(ROCRpredTest.boosting, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.Boosting = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.Boosting
+
+ks.Test.Boosting = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.Boosting
+
+#Gini
+Gini.Train.Boosting = ineq::ineq(XGBoosting.predtrain, "gini")
+Gini.Train.Boosting
+
+Gini.Test.Boosting = ineq::ineq(XGBoosting.predtest, "gini")
+Gini.Test.Boosting
+
+#Finding important variables
+claimsinfo_matrix = data.matrix(train.smote)
+
+xgb.plot.importance(xgb.importance(feature_names = names(claimsinfo_matrix), model = xgb.fit))
+
+
+```
+
+### Tuning Boosting parameters
+
+```{r}
+# ##Further tuning of eta in xbg
+# tp_xgb<-vector()
+# lr <- c(0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 1)
+# md<-c(1,3,5,7,9,15)
+# nr<-c(2, 50, 100, 1000, 5000 ,10000)
+# 
+# for (i in md) {
+# 
+# xgb.fit <- xgboost(data = dtrain,
+# eta = 1,
+# max_depth = i,
+# nrounds = 2,
+# nfold = 5,
+# objective = "binary:logistic",  
+# verbose = 0,               
+# early_stopping_rounds = 10)
+#  
+# xgb.pred.class <- predict(xgb.fit, dtest)
+#  
+# tp_xgb<-cbind(tp_xgb,sum(test$ClaimStatus==1 & xgb.pred.class>=0.1))
+#  
+# }
+# 
+# tp_xgb
+
+```
+
+#Model Building - Renewed
+#Logistic Model
+```{r}
+
+#Building initial model
+mod = glm(Renewed~., data = train, family = "binomial")
+
+summary(mod)
+
+vif(mod)
+
+#Removing Insignificant variable
+mod = glm(Renewed ~ ClaimStatus + Premium + Firstdriver_Age + Seconddriver_Age + Thirddriver_Age + 
+            Amendment + CoveragePD + MaritalStatus_1 + Rental + Vehicle_Inspected + NoLossSigned +
+            Coverage_UM + Billing_Term_6 + Number_of_Driver_1 + Number_of_Driver_2 +
+            Units_1 + Units_2 + Units_3 + Units_4 + Make_Che + Make_For + Make_GM, 
+          data = train, family = "binomial")
+
+summary(mod)
+
+
+#Removing Insignificant variables - NoLossSigned
+mod = glm(Renewed ~ ClaimStatus + Premium + Firstdriver_Age + Seconddriver_Age + Thirddriver_Age + 
+            Amendment + CoveragePD + MaritalStatus_1 + Rental + Vehicle_Inspected +
+            Coverage_UM + Billing_Term_6 + Number_of_Driver_1 + Number_of_Driver_2 +
+            Units_1 + Units_2 + Units_3 + Units_4 + Make_Che + Make_For + Make_GM, 
+          data = train, family = "binomial")
+
+summary(mod)
+
+vif(mod)
+
+#Removing Insignificant variables - Units1
+final.mod.renewed = glm(Renewed ~ ClaimStatus  + Firstdriver_Age + Amendment  + MaritalStatus_1 + 
+                          Rental + Vehicle_Inspected + Billing_Term_6  + Number_of_Driver_2 +
+                          Units_2 + Units_3 + Units_4  + Make_For , data = train, family = "binomial")
+
+summary(final.mod.renewed)
+
+vif(final.mod.renewed)
+
+#Getting the Odds and probability values
+odds = exp(coef(final.mod.renewed))
+odds
+
+prob = odds/(1+odds)
+prob
+
+relativeImportance=(odds[-1]/sum(odds[-1]))*100
+relativeImportance[order(relativeImportance)]
+
+
+#Training data performance measurements
+#Confusion Matrix
+predtrain = predict(object = final.mod.renewed, newdata = train, type = "response")
+blr_confusion_matrix(model = final.mod.renewed, cutoff = 0.6, data = train) 
+
+predtest = predict(object = final.mod.renewed, newdata = test, type = "response")
+blr_confusion_matrix(model = final.mod.renewed, cutoff = 0.6, data = test) 
+
+#KS
+K = blr_gains_table(final.mod.renewed, data = train)
+plot(K)
+
+blr_ks_chart(K, title = "KS Chart Training Data",
+             yaxis_title = " ",xaxis_title = "Cumulative Population %",
+             ks_line_color = "black")
+
+
+#Gini 
+blr_gini_index(final.mod.renewed, data = train)
+
+#AUC 
+ROCRpredTrain = prediction(predtrain, train$Renewed)
+auctrain = as.numeric(performance(ROCRpredTrain, "auc")@y.values)
+auctrain
+perftrain = performance(ROCRpredTrain, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+#Performance on test dataset
+#KS
+K.test = blr_gains_table(final.mod.renewed, data = test)
+plot(K.test)
+
+blr_ks_chart(K.test, title = "KS Chart Testing Data",
+             yaxis_title = " ",xaxis_title = "Cumulative Population %",
+             ks_line_color = "black")
+
+#Gini 
+blr_gini_index(final.mod.renewed, data = test)
+
+#AUC 
+ROCRpredTest = prediction(predtest, test$Renewed)
+auctest = as.numeric(performance(ROCRpredTest, "auc")@y.values)
+auctest
+perftrain = performance(ROCRpredTest, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+```
+
+#Decision Tree
+```{r}
+
+#Building initial tree
+set.seed(200)
+tree.renewed = rpart(Renewed~., data = train, method = "class", cp = 0, minbucket = 10)
+
+print(tree.renewed)
+printcp(tree.renewed)
+
+which.min(tree$cptable[,"xerror"])
+
+#Prune Tree
+ptree.renewed = prune(tree.renewed, cp = 9.4928e-04, "CP")
+
+rpart.rules(ptree.renewed)
+#Prediction on Training Data
+predtrain.DT = predict(object = ptree.renewed, newdata = train, type = "class")
+predtrain.score = predict(object = ptree.renewed, newdata = train, type = "prob")[,"1"]
+
+#Prediction on Testing Data
+predtest.DT = predict(object = ptree.renewed, newdata = test, type = "class")
+predtest.score = predict(object = ptree.renewed, newdata = test, type = "prob")[,"1"]
+
+#Performance Measures on Training & Testing Data
+confusionMatrix(predtrain.DT, train$Renewed, positive = "1")
+confusionMatrix(predtest.DT, test$Renewed, positive = "1")
+
+#ROCR curve & AUC
+ROCRpredTrain.DT = prediction(predtrain.score, train$Renewed)
+auctrain.DT = as.numeric(performance(ROCRpredTrain.DT, "auc")@y.values)
+auctrain.DT
+perftrain = performance(ROCRpredTrain.DT, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+ROCRpredTest.DT = prediction(predtest.score, test$Renewed)
+auctest.DT = as.numeric(performance(ROCRpredTest.DT, "auc")@y.values)
+auctest.DT
+perftest = performance(ROCRpredTest.DT, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.DT = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.DT
+
+ks.Test.DT = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.DT
+
+#Gini
+Gini.Train.DT = ineq::ineq(predtrain.DT, "gini")
+Gini.Train.DT
+
+Gini.Test.DT = ineq::ineq(predtest.DT, "gini")
+Gini.Test.DT
+
+
+```
+
+#Random Forest
+```{r}
+
+#Building Random Forest 
+Rforest.renewed = randomForest(Renewed~., data = train, ntree = 501, mtry = 3, nodesize = 10, importance = T)
+
+#Print 
+print(Rforest.renewed)
+
+#Plot RF to know optimum no of trees
+plot(Rforest.renewed)
+
+#Tuning RF
+set.seed(1000)
+tRforest.renewed = tuneRF(x = train[-3], y = train$Renewed, mtryStart = 3, ntreeTry = 100, 
+                  stepFactor = 1.5, improve = 0.0001, nodesize = 10, trace = T, plot = T, 
+                  doBest = T, importance = T)
+
+                  
+#Rebuilding model using tuning parameters
+Rforest.renewed = randomForest(formula = Renewed~., data = train, ntree = 100, mtry = 6, 
+                       nodesize = 10, importance = T )
+
+
+varImp(Rforest.renewed)
+##Use this tree to do the prediction on train as well as test data set
+predtrain.RF= predict(object = Rforest.renewed, newdata = train, type = "class")
+predtrainRF.score = predict(object = Rforest.renewed, newdata = train, type = "prob")[,"1"]
+
+predtest.RF = predict(object = Rforest.renewed, newdata = test, type = "class")
+predtestRF.score = predict(object = Rforest.renewed, newdata = test, type = "prob")[,"1"]
+
+#Performance Measures on Train & Testing data
+confusionMatrix(predtrain.RF, train$Renewed, positive = "1")
+confusionMatrix(predtest.RF, test$Renewed, positive = "1")
+
+#ROCR Curve & AUC
+ROCRpredTrain.RF = prediction(predtrainRF.score, train$Renewed)
+auctrain.RF = as.numeric(performance(ROCRpredTrain.RF, "auc")@y.values)
+auctrain.RF
+perftrain = performance(ROCRpredTrain.RF, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+ROCRpredTest.RF = prediction(predtestRF.score, test$Renewed)
+auctest.RF = as.numeric(performance(ROCRpredTest.RF, "auc")@y.values)
+auctest.RF
+perftest = performance(ROCRpredTest.RF, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.RF = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.RF
+
+ks.Test.RF = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.RF
+
+#Gini
+Gini.Train.RF = ineq::ineq(predtrain.RF, "gini")
+Gini.Train.RF
+
+Gini.Test.RF = ineq::ineq(predtest.RF, "gini")
+Gini.Test.RF
+
+```
+
+#Naive Bayes
+```{r}
+
+#Building naive bayes model
+naive_renewed = naiveBayes(Renewed~., data = train, usekernel = T)
+#naive_renewed
+
+#Predicting using Train & Test
+predtrain.NB = predict(naive_renewed, train, type="class")
+predtest.NB = predict(naive_renewed, test,type="class")
+
+# Confusion Matrix - train data & test data 
+confusionMatrix(predtrain.NB, train$Renewed, positive = "1")
+confusionMatrix(predtest.NB, test$Renewed, positive = "1")
+
+#ROCR Curve & AUC
+predvec = ifelse(predtrain.NB=="1", 1, 0)
+realvec = ifelse(train$Renewed=="1", 1, 0)
+pred <- prediction(predvec,realvec)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+plot(perf, main = "ROC curve for Naive Bayes Classifier",col = "blue", lwd = 3)
+abline(a = 0, b = 1, lwd = 2, lty = 2)
+
+perf.auc <- performance(pred, measure = "auc")
+unlist(perf.auc@y.values)
+
+predvec.test = ifelse(predtest.NB=="1", 1, 0)
+realvec.test = ifelse(test$Renewed=="1", 1, 0)
+pred.test = prediction(predvec.test,realvec.test)
+perf.test = performance(pred.test, measure = "tpr", x.measure = "fpr")
+plot(perf.test, main = "ROC curve for Naive Bayes Classifier",col = "blue", lwd = 3)
+abline(a = 0, b = 1, lwd = 2, lty = 2)
+
+perf.auc.test <- performance(pred.test, measure = "auc")
+unlist(perf.auc.test@y.values)
+
+perftrain = performance(pred, "tpr","fpr")
+perftest = performance(pred.test, "tpr", "fpr")
+
+#KS
+ks.Train.NB = max(unlist(perftrain@y.values[[1]]) - unlist(perftrain@x.values))
+ks.Train.NB
+
+ks.Test.NB = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.NB
+
+#Gini
+Gini.Train.NB = ineq::ineq(predtrain.NB, "gini")
+Gini.Train.NB
+
+Gini.Test.NB = ineq::ineq(predtest.NB, "gini")
+Gini.Test.NB
+
+# #To get important variables
+# x = train.smote[-3]
+# y = train.smote$Renewed
+# 
+# mod = train(Renewed ~., data = train.smote, trControl = trainControl(method = "cv", number = 10),
+#             method = "nb", preProc = c("center", "scale"))
+# 
+# varImp(mod)
+
+```
+
+#Bagging - Renewed
+```{r}
+library(ipred)
+set.seed(400)
+Renewed.bagging = bagging(Renewed~., data = train, 
+                       control=rpart.control(maxdepth=5, minsplit=4), importance = T, method = "treebag")
+
+summary(Renewed.bagging)
+varImp(Renewed.bagging)
+#Prediction on train 
+baggingpred.train = predict(object = Renewed.bagging, train)
+predtrainbagging.score = predict(object = Renewed.bagging, newdata = train, type = "prob")[,"1"]
+
+confusionMatrix(baggingpred.train, train$Renewed, positive = "1") 
+
+#Prediction on test
+baggingpred.test = predict(object = Renewed.bagging, test)
+predtestbagging.score = predict(object = Renewed.bagging, newdata = test, type = "prob")[,"1"]
+
+confusionMatrix(baggingpred.test, test$Renewed, positive = "1") 
+
+#ROCR Curve & AUC
+ROCRpredTrain.Bag = prediction(predtrainbagging.score, train$Renewed)
+auctrain.Bag = as.numeric(performance(ROCRpredTrain.Bag, "auc")@y.values)
+auctrain.Bag
+perftrain = performance(ROCRpredTrain.Bag, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+ROCRpredTest.Bag = prediction(predtestbagging.score, test$Renewed)
+auctest.Bag = as.numeric(performance(ROCRpredTest.Bag, "auc")@y.values)
+auctest.Bag
+perftest = performance(ROCRpredTest.Bag, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.Bag = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.Bag
+
+ks.Test.Bag = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.Bag
+
+#Gini
+Gini.Train.Bag = ineq::ineq(baggingpred.train, "gini")
+Gini.Train.Bag
+
+Gini.Test.Bag = ineq::ineq(baggingpred.test, "gini")
+Gini.Test.Bag
+
+```
+
+#Boosting
+```{r}
+
+#Building model using Gradient boosting
+GBM.train = train
+GBM.test  = test
+GBM.train$Renewed = as.numeric(GBM.train$Renewed)-1
+
+set.seed(100)
+Renewed.boosting = gbm(formula = Renewed~., distribution = "bernoulli", data = GBM.train,
+                    n.trees = 100, interaction.depth = 10, shrinkage = 0.1,
+                    cv.folds = 5, verbose = F, n.cores = NULL)
+
+summary(Renewed.boosting)
+#Prediction on train 
+boostingpred.train = predict(object = Renewed.boosting, GBM.train, type = "response", n.trees = 100)
+boostingpred.train = as.factor(ifelse(boostingpred.train>0.4,1,0))
+confusionMatrix(boostingpred.train, as.factor(GBM.train$Renewed), positive = "1") 
+
+#Prediction on test
+boostingpred.test = predict(object = Renewed.boosting, GBM.test, type = "response", n.trees = 100)
+boostingpred.test = as.factor(ifelse(boostingpred.test>0.4,1,0))
+confusionMatrix(boostingpred.test, as.factor(GBM.test$Renewed), positive = "1") 
+
+#Other Performance Measures
+#Auc
+boostingpred.train = predict(object = Renewed.boosting, GBM.train, type = "response", n.trees = 100)
+ROCRpredTrain.boosting = prediction(boostingpred.train, GBM.train$Renewed)
+auctrain = as.numeric(performance(ROCRpredTrain.boosting, "auc")@y.values)
+auctrain
+perftrain = performance(ROCRpredTrain.boosting, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+boostingpred.test = predict(object = Renewed.boosting, GBM.test, type = "response", n.trees = 100)
+ROCRpredTest.boosting = prediction(boostingpred.test, GBM.test$Renewed)
+auctest = as.numeric(performance(ROCRpredTest.boosting, "auc")@y.values) #81.2
+auctest
+perftest = performance(ROCRpredTest.boosting, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.Bag = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.Bag
+
+ks.Test.Bag = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.Bag
+
+#Gini
+Gini.Train.Bag = ineq::ineq(boostingpred.train, "gini")
+Gini.Train.Bag
+
+Gini.Test.Bag = ineq::ineq(boostingpred.test, "gini")
+Gini.Test.Bag
+
+```
+
+#XGBoosting
+```{r}
+#Tuning boosting model using XGboosting
+labels = train$Renewed
+ts_label = test$Renewed
+
+new_tr = model.matrix(~.+0, data = train[,-3])
+new_ts = model.matrix(~.+0, data = test[,-3])
+
+labels = as.numeric(labels) - 1
+ts_label = as.numeric(ts_label) - 1
+
+library(xgboost)
+dtrain = xgb.DMatrix(data = new_tr, label = labels)
+dtest = xgb.DMatrix(data = new_ts, label = ts_label)
+
+xgb.fit.renewed = xgboost(data = dtrain, eta = 1, 
+                  max_depth = 15, min_child_weight = 3, nrounds = 5000, nfold = 5,
+                  objective = "binary:logistic", verbose = 0, early_stopping_rounds = 10)
+
+#Predicting on Training & Test Datasets
+XGBoosting.predtrain = predict(object = xgb.fit.renewed, dtrain)
+XGBoosting.predtrain = as.factor(ifelse(XGBoosting.predtrain>0.3,1,0))
+confusionMatrix(XGBoosting.predtrain, train$Renewed, positive = "1")
+
+XGBoosting.predtest = predict(object = xgb.fit.renewed, dtest)
+XGBoosting.predtest = as.factor(ifelse(XGBoosting.predtest>0.3,1,0))
+confusionMatrix(XGBoosting.predtest, test$Renewed, positive = "1")
+
+#Other Performance Measures
+#Auc
+XGBoosting.predtrain = predict(object = xgb.fit.renewed, dtrain)
+ROCRpredTrain.boosting = prediction(XGBoosting.predtrain, GBM.train$Renewed)
+auctrain = as.numeric(performance(ROCRpredTrain.boosting, "auc")@y.values)
+auctrain
+perftrain = performance(ROCRpredTrain.boosting, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+XGBoosting.predtest = predict(object = xgb.fit.renewed, dtest)
+ROCRpredTest.boosting = prediction(boostingpred.test, GBM.test$Renewed)
+auctest = as.numeric(performance(ROCRpredTest.boosting, "auc")@y.values) #81.2
+auctest
+perftest = performance(ROCRpredTest.boosting, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+#KS
+ks.Train.Bag = max(perftrain@y.values[[1]] - perftrain@x.values[[1]])
+ks.Train.Bag
+
+ks.Test.Bag = max(perftest@y.values[[1]] - perftest@x.values[[1]])
+ks.Test.Bag
+
+#Gini
+Gini.Train.Bag = ineq::ineq(XGBoosting.predtrain, "gini")
+Gini.Train.Bag
+
+Gini.Test.Bag = ineq::ineq(XGBoosting.predtest, "gini")
+Gini.Test.Bag
+
+#Finding important variables
+Renewedinfo_matrix = data.matrix(train.smote)
+
+xgb.plot.importance(xgb.importance(feature_names = names(Renewedinfo_matrix), model = xgb.fit.renewed))
+
+```
+
+#Business Insights for Claimstatus & Renewed
+```{r}
+
+#GBM model important factors - Claimstatus
+summary(claims.boosting)
+#Premium
+Premium = auto.new %>% group_by(ClaimStatus) %>% summarise(Prem = mean(Premium))
+
+ggplot(Premium, aes(x = ClaimStatus, y = Prem)) + geom_bar(stat = "identity", aes(fill = ClaimStatus)) + 
+  scale_fill_brewer(palette = "Set1", direction = -1) + labs(title = "Average Premium based on Claimstatus") + ylab(label = "Premium")
+  
+#Seconddriver_Age
+Age = auto.new %>% group_by(ClaimStatus) %>% summarise(Age1 = mean(Firstdriver_Age), Age2 = mean(Seconddriver_Age))
+Age
+ggplot(Age, aes(x = ClaimStatus, y = Age1)) + geom_bar(stat = "identity", aes(fill = ClaimStatus)) + 
+  scale_fill_brewer(palette = "Set1", direction = -1) + 
+  labs(title = "Average Age of First Driver based on Claimstatus") + ylab(label = "Age")
+
+ggplot(Age, aes(x = ClaimStatus, y = Age2)) + geom_bar(stat = "identity", aes(fill = ClaimStatus)) + 
+  scale_fill_brewer(palette = "Set1", direction = -1) + 
+  labs(title = "Average Age of Second Driver based on Claimstatus") + ylab(label = "Age")
+
+#Renewed
+Renewed = auto.new %>% group_by(ClaimStatus, Renewed) %>% summarise(Count = n()) 
+Renewed
+
+ggplot(auto.new, aes(x = Renewed)) + geom_bar(aes(fill = ClaimStatus)) + 
+  scale_fill_brewer(palette = "Set1", direction = -1) + labs(title = "Renewed Vs Claims")
+
+#Year
+Year = auto.new %>% group_by(ClaimStatus) %>% summarise(Avg = mean(Year))
+Year
+
+ggplot(auto.new, aes(x = ClaimStatus, y = Year)) + geom_boxplot(aes(fill = ClaimStatus)) +  
+  scale_fill_brewer(palette = "Set1", direction = -1) + labs(title = "Claim Status based on Year")
+
+
+#GBM Model important factors- Renewed
+summary(Renewed.boosting)
+
+my.cols = brewer.pal(n = 12,"Paired")
+my.cols = c("#1F78B4","#6A3D9A")
+
+
+#Billing_Term_6
+BT6 = auto.new %>% group_by(Renewed, Billing_Term_6) %>% summarise(Count = n())
+BT6
+
+ggplot(auto.new, aes(x = Billing_Term_6)) + geom_bar(aes(fill = Renewed)) + 
+  scale_fill_manual(values = my.cols) + labs(title = "Renewed Vs Billing_Term_6")
+
+#Premium
+Premium = auto.new %>% group_by(Renewed, ClaimStatus) %>% summarise(Prem = mean(Premium))
+Premium
+
+ggplot(Premium, aes(x = Renewed, y = Prem)) + geom_bar(stat = "identity", aes(fill = Renewed)) + 
+  scale_fill_manual(values = my.cols) + labs(title = "Average Premium based on Renewal") + ylab(label = "Premium")
+
+#Type_DP
+Type = auto.new %>% group_by(Renewed, Type_DP, Type_REN) %>% summarise(Count = n())
+Type
+
+ggplot(auto.new, aes(x = Type_DP)) + geom_bar(aes(fill = Renewed)) + 
+  scale_fill_manual(values = my.cols) + labs(title = "Renewal and Type of Insurance")
+
+
+ggplot(auto.new, aes(x = Type_REN)) + geom_bar(aes(fill = Renewed)) + 
+  scale_fill_manual(values = my.cols) + labs(title = "Renewal and Type of Insurance")
+
+#Firsdriver_Age
+Age = auto.new %>% group_by(Renewed) %>% summarise(Age1 = mean(Firstdriver_Age))
+Age
+
+ggplot(Age, aes(x = Renewed, y = Age1)) + geom_bar(stat = "identity", aes(fill = Renewed)) + 
+  scale_fill_manual(values = my.cols) + 
+  labs(title = "Average Age of First Driver based on Renewal") + ylab(label = "Age")
+  
+
+```
+
