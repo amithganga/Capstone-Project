@@ -1,0 +1,649 @@
+---
+title: "Appendix-A"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exploratory Data Analysis
+
+
+## Environment Setup and Data import
+
+### Load necessary Libraries
+
+```{r}
+
+library(readxl)
+library(ggplot2)
+library(corrplot)
+library(car)
+library(lmtest)
+library(blorr)
+library(DMwR)
+library(caret)
+
+```
+
+### Set up working directory
+
+```{r}
+
+setwd("E:\\Great Learning_BABI\\09_Domain Courses\\01_FRA\\Project- FRA India Credit Risk Default Model")
+
+```
+
+### Import Dataset
+
+```{r}
+
+train = as.data.frame(read_excel("raw-data.xlsx"))
+test = as.data.frame(read_excel("validation_data.xlsx"))
+
+```
+
+### Variable Identification
+```{r}
+#Dimensions of Training and Testing Datasets
+dim(train)
+dim(test)
+
+#Top and bottom of Training & Testing Datasets
+#Training Set
+head(train)
+tail(train)
+
+#Testing Set
+head(test)
+tail(test)
+
+#Names of Training & Testing Datasets
+names(train)
+names(test)
+
+#str of Training & Testing Datasets
+str(train)
+str(test)
+
+#Converting Character variables to numeric in Training & Testing Datasets
+#Training Set
+train$`Creditors turnover` = as.numeric(train$`Creditors turnover`)
+train$`Debtors turnover` = as.numeric(train$`Debtors turnover`)
+train$`Finished goods turnover` = as.numeric(train$`Finished goods turnover`)
+train$`WIP turnover` = as.numeric(train$`WIP turnover`)
+train$`Raw material turnover` = as.numeric(train$`Raw material turnover`)
+train$`Shares outstanding` = as.numeric(train$`Shares outstanding`)
+train$`Equity face value` = as.numeric(train$`Equity face value`)
+train$`PE on BSE` = as.numeric(train$`PE on BSE`)
+
+#Testing Set
+test$`Creditors turnover` = as.numeric(test$`Creditors turnover`)
+test$`Debtors turnover` = as.numeric(test$`Debtors turnover`)
+test$`Finished goods turnover` = as.numeric(test$`Finished goods turnover`)
+test$`WIP turnover` = as.numeric(test$`WIP turnover`)
+test$`Raw material turnover` = as.numeric(test$`Raw material turnover`)
+test$`Shares outstanding` = as.numeric(test$`Shares outstanding`)
+test$`Equity face value` = as.numeric(test$`Equity face value`)
+test$`PE on BSE` = as.numeric(test$`PE on BSE`)
+
+#Summary of the dataset
+summary(train)
+summary(test)
+
+#Creating target variable Default in training set from variable Networth Next Year and 
+#removing variable along with variable 'Num'
+train$Default = as.factor(ifelse(train$`Networth Next Year`< 0, 1, 0))
+train = train[-c(1,2)]
+
+#Removing variable 'Num' in testing set
+test = test[-1]
+colnames(test)[1] = "Default"
+test$Default = as.factor(test$Default)
+
+#Struture of datasets
+str(train)
+str(test)
+
+
+#Missing values 
+colSums(is.na(train))
+colSums(is.na(test))
+
+#Removing variables with over 30% missing data
+sapply(train, function(x) sum(is.na(x)))/nrow(train) * 100
+train.new = train[,which(colMeans(is.na(train)) <= 0.3)]
+names(train)
+names(train.new) 
+#Other Income, Deferred Tax Liabilities, Contingent Liabilities ,Investments, Deposits & PE on BSE removed
+
+sapply(test, function(x) sum(is.na(x)))/nrow(test) * 100
+test.new = test[,which(colMeans(is.na(test)) <= 0.29)]
+names(test)
+names(test.new) 
+#Other Income, Deferred Tax Liabilities, Contingent Liabilities ,Investments, Deposits & PE on BSE removed
+
+
+#Percentage Defaulters in Training & Testing Datasets
+table(train.new$Default)
+table(test.new$Default)
+
+prop.table(table(train.new$Default))
+prop.table(table(test.new$Default))
+
+#Highly imbalanced dataset
+```
+
+
+## Outlier Treatment
+```{r}
+
+names = colnames(train.new)
+sapply(train.new[,names], summary)
+
+#Function to cap outliers with 1st & 99th quartile values
+
+fun <- function(x){
+    quantiles <- quantile( x, c(.01, .99 ), na.rm = T )
+    x[ x < quantiles[1] ] <- quantiles[1]
+    x[ x > quantiles[2] ] <- quantiles[2]
+    x
+}
+
+train.new$`Total assets` = fun(train.new$`Total assets`)
+train.new$`Net worth` = fun(train.new$`Net worth`)
+train.new$`Total income` = fun(train.new$`Total income`)
+train.new$`Change in stock` = fun(train.new$`Change in stock`)
+train.new$`Total expenses` = fun(train.new$`Total expenses`)
+train.new$`Profit after tax` = fun(train.new$`Profit after tax`)
+train.new$PBDITA = fun(train.new$PBDITA)
+train.new$PBT = fun(train.new$PBT)
+train.new$`Cash profit` = fun(train.new$`Cash profit`)
+train.new$`PBDITA as % of total income` = fun(train.new$`PBDITA as % of total income`)
+train.new$`PBT as % of total income` = fun(train.new$`PBT as % of total income`)
+train.new$`PAT as % of total income` = fun(train.new$`PAT as % of total income`)
+train.new$`Cash profit as % of total income` = fun(train.new$`Cash profit as % of total income`)
+train.new$`PAT as % of net worth` = fun(train.new$`PAT as % of net worth`)
+train.new$Sales = fun(train.new$Sales)
+train.new$`Income from financial services` = fun(train.new$`Income from financial services`)
+train.new$`Total capital` = fun(train.new$`Total capital`)
+train.new$`Reserves and funds` = fun(train.new$`Reserves and funds`)
+train.new$Borrowings = fun(train.new$Borrowings)
+train.new$`Current liabilities & provisions` = fun(train.new$`Current liabilities & provisions`)
+train.new$`Shareholders funds` = fun(train.new$`Shareholders funds`)
+train.new$`Cumulative retained profits` = fun(train.new$`Cumulative retained profits`)
+train.new$`Capital employed`= fun(train.new$`Capital employed`)
+train.new$`TOL/TNW` = fun(train.new$`TOL/TNW`)
+train.new$`Total term liabilities / tangible net worth` = fun(train.new$`Total term liabilities / tangible net worth`)
+train.new$`Contingent liabilities / Net worth (%)` = fun(train.new$`Contingent liabilities / Net worth (%)`)
+train.new$`Net fixed assets` = fun(train.new$`Net fixed assets`)
+train.new$`Current assets` = fun(train.new$`Current assets`)
+train.new$`Net working capital` = fun(train.new$`Net working capital`)
+train.new$`Quick ratio (times)` = fun(train.new$`Quick ratio (times)`)
+train.new$`Current ratio (times)` = fun(train.new$`Current ratio (times)`)
+train.new$`Debt to equity ratio (times)` = fun(train.new$`Debt to equity ratio (times)`)
+train.new$`Cash to current liabilities (times)` = fun(train.new$`Cash to current liabilities (times)`)
+train.new$`Cash to average cost of sales per day` = fun(train.new$`Cash to average cost of sales per day`)
+train.new$`Creditors turnover` = fun(train.new$`Creditors turnover`)
+train.new$`Debtors turnover` = fun(train.new$`Debtors turnover`)
+train.new$`Finished goods turnover` = fun(train.new$`Finished goods turnover`)
+train.new$`WIP turnover` = fun(train.new$`WIP turnover`)
+train.new$`Raw material turnover` = fun(train.new$`Raw material turnover`)
+train.new$`Shares outstanding` = fun(train.new$`Shares outstanding`)
+train.new$`Equity face value` = fun(train.new$`Equity face value`)
+train.new$EPS = fun(train.new$EPS)
+train.new$`Adjusted EPS` = fun(train.new$`Adjusted EPS`)
+train.new$`Total liabilities` = fun(train.new$`Total liabilities`)
+
+names = colnames(train.new)
+sapply(train.new[,names], summary)
+
+
+```
+
+
+##Missing value Treatment
+```{r}
+
+#Replacing Missing values with median in training set
+train.new$`Total income`[is.na(train.new$`Total income`)] = median(train.new$`Total income`, na.rm = T)
+train.new$`Change in stock`[is.na(train.new$`Change in stock`)] = median(train.new$`Change in stock`, na.rm = T)
+train.new$`Total expenses`[is.na(train.new$`Total expenses`)] = median(train.new$`Total expenses`, na.rm = T)
+train.new$`Profit after tax`[is.na(train.new$`Profit after tax`)] = median(train.new$`Profit after tax`, na.rm = T)
+train.new$PBDITA[is.na(train.new$PBDITA)] = median(train.new$PBDITA, na.rm = T)
+train.new$PBT[is.na(train.new$PBT)] = median(train.new$PBT, na.rm = T)
+train.new$`Cash profit`[is.na(train.new$`Cash profit`)] = median(train.new$`Cash profit`, na.rm = T)
+train.new$`PBDITA as % of total income`[is.na(train.new$`PBDITA as % of total income`)] = median(train.new$`PBDITA as % of total income`, na.rm = T)
+train.new$`PBT as % of total income`[is.na(train.new$`PBT as % of total income`)] = median(train.new$`PBT as % of total income`, na.rm = T)
+train.new$`PAT as % of total income`[is.na(train.new$`PAT as % of total income`)] = median(train.new$`PAT as % of total income`, na.rm = T)
+train.new$`Cash profit as % of total income`[is.na(train.new$`Cash profit as % of total income`)] = median(train.new$`Cash profit as % of total income`, na.rm = T)
+train.new$Sales[is.na(train.new$Sales)] = median(train.new$Sales, na.rm = T)
+train.new$`Income from financial services`[is.na(train.new$`Income from financial services`)] = median(train.new$`Income from financial services`, na.rm = T)
+train.new$`Total capital`[is.na(train.new$`Total capital`)] = median(train.new$`Total capital`, na.rm = T)
+train.new$`Reserves and funds`[is.na(train.new$`Reserves and funds`)] = median(train.new$`Reserves and funds`, na.rm = T)
+train.new$Borrowings[is.na(train.new$Borrowings)] = median(train.new$Borrowings, na.rm = T)
+train.new$`Current liabilities & provisions`[is.na(train.new$`Current liabilities & provisions`)] = median(train.new$`Current liabilities & provisions`, na.rm = T)
+train.new$`Cumulative retained profits`[is.na(train.new$`Cumulative retained profits`)] = median(train.new$`Cumulative retained profits`, na.rm = T)
+
+train.new$`Net fixed assets`[is.na(train.new$`Net fixed assets`)] = median(train.new$`Net fixed assets`, na.rm = T)
+train.new$`Current assets`[is.na(train.new$`Current assets`)] = median(train.new$`Current assets`, na.rm = T)
+train.new$`Net working capital`[is.na(train.new$`Net working capital`)] = median(train.new$`Net working capital`, na.rm = T)
+train.new$`Quick ratio (times)`[is.na(train.new$`Quick ratio (times)`)] = median(train.new$`Quick ratio (times)`, na.rm = T)
+train.new$`Current ratio (times)`[is.na(train.new$`Current ratio (times)`)] = median(train.new$`Current ratio (times)`, na.rm = T)
+train.new$`Cash to current liabilities (times)`[is.na(train.new$`Cash to current liabilities (times)`)] = median(train.new$`Cash to current liabilities (times)`, na.rm = T)
+train.new$`Cash to average cost of sales per day`[is.na(train.new$`Cash to average cost of sales per day`)] = median(train.new$`Cash to average cost of sales per day`, na.rm = T)
+train.new$`Creditors turnover`[is.na(train.new$`Creditors turnover`)] = median(train.new$`Creditors turnover`, na.rm = T)
+train.new$`Debtors turnover`[is.na(train.new$`Debtors turnover`)] = median(train.new$`Debtors turnover`, na.rm = T)
+train.new$`Finished goods turnover`[is.na(train.new$`Finished goods turnover`)] = median(train.new$`Finished goods turnover`, na.rm = T)
+train.new$`WIP turnover`[is.na(train.new$`WIP turnover`)] = median(train.new$`WIP turnover`, na.rm = T)
+train.new$`Raw material turnover`[is.na(train.new$`Raw material turnover`)] = median(train.new$`Raw material turnover`, na.rm = T)
+train.new$`Shares outstanding`[is.na(train.new$`Shares outstanding`)] = median(train.new$`Shares outstanding`, na.rm = T)
+train.new$`Equity face value`[is.na(train.new$`Equity face value`)] = median(train.new$`Equity face value`, na.rm = T)
+
+anyNA(train.new)
+
+#Replacing missing values in testing dataset
+test.new$`Total income`[is.na(test.new$`Total income`)] = median(test.new$`Total income`, na.rm = T)
+test.new$`Change in stock`[is.na(test.new$`Change in stock`)] = median(test.new$`Change in stock`, na.rm = T)
+test.new$`Total expenses`[is.na(test.new$`Total expenses`)] = median(test.new$`Total expenses`, na.rm = T)
+test.new$`Profit after tax`[is.na(test.new$`Profit after tax`)] = median(test.new$`Profit after tax`, na.rm = T)
+test.new$PBDITA[is.na(test.new$PBDITA)] = median(test.new$PBDITA, na.rm = T)
+test.new$PBT[is.na(test.new$PBT)] = median(test.new$PBT, na.rm = T)
+test.new$`Cash profit`[is.na(test.new$`Cash profit`)] = median(test.new$`Cash profit`, na.rm = T)
+test.new$`PBDITA as % of total income`[is.na(test.new$`PBDITA as % of total income`)] = median(test.new$`PBDITA as % of total income`, na.rm = T)
+test.new$`PBT as % of total income`[is.na(test.new$`PBT as % of total income`)] = median(test.new$`PBT as % of total income`, na.rm = T)
+test.new$`PAT as % of total income`[is.na(test.new$`PAT as % of total income`)] = median(test.new$`PAT as % of total income`, na.rm = T)
+test.new$`Cash profit as % of total income`[is.na(test.new$`Cash profit as % of total income`)] = median(test.new$`Cash profit as % of total income`, na.rm = T)
+test.new$Sales[is.na(test.new$Sales)] = median(test.new$Sales, na.rm = T)
+test.new$`Income from financial services`[is.na(test.new$`Income from financial services`)] = median(test.new$`Income from financial services`, na.rm = T)
+test.new$`Total capital`[is.na(test.new$`Total capital`)] = median(test.new$`Total capital`, na.rm = T)
+test.new$`Reserves and funds`[is.na(test.new$`Reserves and funds`)] = median(test.new$`Reserves and funds`, na.rm = T)
+test.new$Borrowings[is.na(test.new$Borrowings)] = median(test.new$Borrowings, na.rm = T)
+test.new$`Current liabilities & provisions`[is.na(test.new$`Current liabilities & provisions`)] = median(test.new$`Current liabilities & provisions`, na.rm = T)
+test.new$`Cumulative retained profits`[is.na(test.new$`Cumulative retained profits`)] = median(test.new$`Cumulative retained profits`, na.rm = T)
+test.new$`Net fixed assets`[is.na(test.new$`Net fixed assets`)] = median(test.new$`Net fixed assets`, na.rm = T)
+test.new$`Current assets`[is.na(test.new$`Current assets`)] = median(test.new$`Current assets`, na.rm = T)
+test.new$`Net working capital`[is.na(test.new$`Net working capital`)] = median(test.new$`Net working capital`, na.rm = T)
+test.new$`Quick ratio (times)`[is.na(test.new$`Quick ratio (times)`)] = median(test.new$`Quick ratio (times)`, na.rm = T)
+test.new$`Current ratio (times)`[is.na(test.new$`Current ratio (times)`)] = median(test.new$`Current ratio (times)`, na.rm = T)
+test.new$`Cash to current liabilities (times)`[is.na(test.new$`Cash to current liabilities (times)`)] = median(test.new$`Cash to current liabilities (times)`, na.rm = T)
+test.new$`Cash to average cost of sales per day`[is.na(test.new$`Cash to average cost of sales per day`)] = median(test.new$`Cash to average cost of sales per day`, na.rm = T)
+test.new$`Creditors turnover`[is.na(test.new$`Creditors turnover`)] = median(test.new$`Creditors turnover`, na.rm = T)
+test.new$`Debtors turnover`[is.na(test.new$`Debtors turnover`)] = median(test.new$`Debtors turnover`, na.rm = T)
+test.new$`Finished goods turnover`[is.na(test.new$`Finished goods turnover`)] = median(test.new$`Finished goods turnover`, na.rm = T)
+test.new$`WIP turnover`[is.na(test.new$`WIP turnover`)] = median(test.new$`WIP turnover`, na.rm = T)
+test.new$`Raw material turnover`[is.na(test.new$`Raw material turnover`)] = median(test.new$`Raw material turnover`, na.rm = T)
+test.new$`Shares outstanding`[is.na(test.new$`Shares outstanding`)] = median(test.new$`Shares outstanding`, na.rm = T)
+test.new$`Equity face value`[is.na(test.new$`Equity face value`)] = median(test.new$`Equity face value`, na.rm = T)
+
+anyNA(test.new)
+
+```
+
+##Creation of new Variables
+```{r}
+
+#Profitability Ratio
+#Creation of Asset Turnover Ratio : Sales/avg.of total assets
+
+train.new$Asset.Turnover = train.new$Sales/mean(train.new$`Total assets`)
+test.new$Asset.Turnover = test.new$Sales/mean(test.new$`Total assets`)
+
+summary(train.new$Asset.Turnover)
+
+##Capping outliers
+train.new$Asset.Turnover = fun(train.new$Asset.Turnover)
+summary(train.new$Asset.Turnover)
+
+#Leverage Ratio
+#Creation of Equity Ratio : shareholders funds/Capital Employed
+train.new$Equity.Ratio = train.new$`Shareholders funds`/train.new$`Capital employed`
+test.new$Equity.Ratio = test.new$`Shareholders funds`/test.new$`Capital employed`
+
+summary(train.new$Equity.Ratio)
+
+#Liquidity Ratio
+#Creation of Working capital to Total Assets ratio: Working Capital/Total Assets
+train.new$WCTA = train.new$`Net working capital`/train.new$`Total assets`
+test.new$WCTA = test.new$`Net working capital`/test.new$`Total assets`
+
+summary(train.new$WCTA)
+
+#Capping Outliers
+train.new$WCTA = fun(train.new$WCTA)
+summary(train.new$WCTA)
+
+#Size Ratio
+#Creation of Capital Adequacy Ratio
+train.new$Net.Asset = train.new$`Net worth`/train.new$`Total assets`
+test.new$Net.Asset = test.new$`Net worth`/test.new$`Total assets`
+
+summary(train.new$Net.Asset)
+
+
+#Removing variables used in creation of new variables
+
+# 1.Total Assets
+# 2.Net worth
+# 3.Sales
+# 21.Shareholders Fund 
+# 23.Capital Employed
+# 29.Net Working Capital
+
+
+names(train.new)
+names(test.new)
+
+train.df = train.new[,-c(1,2,15,21,23,29)]
+test.df = test.new[,-c(2,3,16,22,24,30)]
+
+```
+
+#Multicollinearity Check
+```{r}
+
+#Building initial model
+mod = glm(Default~., data = train.df, family = "binomial")
+
+summary(mod)
+
+vif(mod)
+
+
+#Using step method to eliminate multicollinear variables
+blr_step_aic_forward(model = mod, details = F)
+blr_step_aic_backward(model = mod, details = F)
+blr_step_aic_both(model = mod, details = F)
+
+#Finalizing variables from step_aic_both
+
+mod = glm(Default~`PAT as % of net worth` + Net.Asset + `Cash profit` + `Cash to average cost of sales per day` +
+              `Debt to equity ratio (times)` + `Reserves and funds` + `Cash profit as % of total income` + WCTA +
+              `Creditors turnover` + `Shares outstanding` + `Cumulative retained profits` + `Current ratio (times)` +
+              `Adjusted EPS` + `Profit after tax` + `WIP turnover`, data = train.df, family = "binomial")
+
+summary(mod)
+
+vif(mod)
+
+
+train.df = train.df[,c("Default", "PAT as % of net worth", "Net.Asset", "Cash profit", 
+                 "Cash to average cost of sales per day", "Debt to equity ratio (times)" , "Reserves and funds",
+                 "Cash profit as % of total income", "WCTA", "Creditors turnover", "Shares outstanding", 
+                 "Cumulative retained profits", "Current ratio (times)", "Adjusted EPS", "Profit after tax",
+                  "WIP turnover")]
+
+test.df = test.df[,c("Default", "PAT as % of net worth", "Net.Asset", "Cash profit", 
+                 "Cash to average cost of sales per day", "Debt to equity ratio (times)" , "Reserves and funds",
+                 "Cash profit as % of total income", "WCTA", "Creditors turnover", "Shares outstanding", 
+                 "Cumulative retained profits", "Current ratio (times)", "Adjusted EPS", "Profit after tax",
+                  "WIP turnover")]
+
+
+corrplot(cor(train.df[-1]), method = "number")
+
+#Finalizing variables by removing reserves and funds, cumulative retained profits, shares outstanding & profit after tax
+train.final = train.df[,c("Default", "PAT as % of net worth", "Net.Asset", "Cash profit", 
+                 "Cash to average cost of sales per day", "Debt to equity ratio (times)" ,
+                 "Cash profit as % of total income", "WCTA", "Creditors turnover", 
+                 "Current ratio (times)", "Adjusted EPS", "WIP turnover")]
+
+test.final = test.df[,c("Default", "PAT as % of net worth", "Net.Asset", "Cash profit", 
+                 "Cash to average cost of sales per day", "Debt to equity ratio (times)" ,
+                 "Cash profit as % of total income", "WCTA", "Creditors turnover", 
+                 "Current ratio (times)", "Adjusted EPS", "WIP turnover")]
+
+corrplot(cor(train.final[-1]), method = "number")
+
+
+#Multicollinearity treated
+```
+
+
+#univariate Analysis
+```{r}
+
+#Plotting histograms of significant variables
+
+list = names(train.final[-1])
+
+for(i in 1:length(list)){
+  hist(train.final[,list[i]], main = list[i], xlab = list[i])
+}
+
+
+```
+
+##Bivariate Analysis
+```{r}
+
+#PAT as % of net worth
+ggplot(train.final, aes(x = Default, y = `PAT as % of net worth`)) + geom_boxplot() + ggtitle(label = "Relationship between PAT as % of net worth and Default")
+
+#Net Asset
+ggplot(train.final, aes(x  = Default, y = Net.Asset)) + geom_boxplot() + ggtitle(label = "Relationship between Net Asset and Default")
+
+#Cash Profit
+ggplot(train.final, aes(x = Default, y = `Cash profit`)) + geom_boxplot() + ggtitle(label = "Relationship between Cash Profit and Default")
+
+#Cash to average cost of sales per day
+ggplot(train.final, aes(x = Default, y = `Cash to average cost of sales per day`)) + geom_boxplot() + ggtitle(label = "Relationship between Cash to average cost of sales per day and Default")
+
+#Debt to equity ratio(times)
+ggplot(train.final, aes(x = Default, y = `Debt to equity ratio (times)`)) + geom_boxplot() + ggtitle(label = "Relationship between Debt to equity ratio (times) and Default")
+
+#Cash profit as % of total income
+ggplot(train.final, aes(x = Default, y = `Cash profit as % of total income`)) + geom_boxplot() + ggtitle(label = "Relationship between Cash Profit as % of total income and Default")
+
+#WCTA
+ggplot(train.final, aes(x = Default, y = WCTA)) + geom_boxplot() + ggtitle(label = "Relationship between WCTA and Default")
+
+#Creditors Turnover
+ggplot(train.final, aes(x = Default, y = `Creditors turnover`)) + geom_boxplot() + ggtitle(label = "Relationship between Creditors Turnover and Default")
+
+#Current Ratio (times)
+ggplot(train.final, aes(x = Default, y = `Current ratio (times)`)) + geom_boxplot() + ggtitle(label = "Relationship between Current Ratio (times) and Default")
+
+#Adjusted EPS
+ggplot(train.final, aes(x = Default, y = `Adjusted EPS`)) + geom_boxplot() + ggtitle(label = "Relationship between Adjusted EPS and Default")
+
+#WIP Turnover
+ggplot(train.final, aes(x = Default, y = `WIP turnover`)) + geom_boxplot() + ggtitle(label = "Relationship between WIP Turnover and Default")
+
+```
+
+
+###Building Final Logistic Model
+```{r}
+
+#Building model after removing multicollinearity
+mod = glm(Default~., data = train.final, family = "binomial")
+
+summary(mod)
+
+vif(mod)
+
+
+
+#Final Model
+LR.mod = glm(Default ~ `PAT as % of net worth` + Net.Asset + `Cash profit` +
+               `Cash to average cost of sales per day` + WCTA + `Debt to equity ratio (times)` + 
+               `Cash profit as % of total income` + `Current ratio (times)`, data = train.final, family = "binomial")
+
+summary(LR.mod)
+
+vif(LR.mod)
+
+#Loglikelihood test : To ensure if logit model is valid or not
+
+library(lmtest)
+lrtest(LR.mod)
+
+#To get the logit R2 of goodness
+
+library(pscl)
+pR2(LR.mod) #MCFadden score is 0.44 indicating goodness of fit is moderately robust
+
+#Getting the Odds and probability values
+
+odds = exp((LR.mod$coefficients[-1]))
+odds
+
+prob = odds/(1+odds) * 100
+prob
+
+relativeImportance=(odds[-1]/sum(odds[-1]))*100
+relativeImportance[order(relativeImportance)]
+
+#Performance on train dataset
+predTrain = predict(object = LR.mod, newdata = train.final, type = "response")
+predTest = predict(object = LR.mod, newdata = test.final, type = "response")
+
+#Choosing cut-off value
+boxplot(train.final$Default, LR.mod$fitted.values)
+
+
+#Training & Testing  confusion matrix
+table(ifelse(predTrain>0.1,1,0),train.final$Default)
+table(ifelse(predTest>0.1,1,0),test.final$Default)
+
+#Accuracy
+trainaccuracy = (3080+180)/(3080 + 227 + 54 + 180)
+trainaccuracy
+
+testaccuracy = (607+45)/(607+45+9+54)
+testaccuracy
+
+#Class Error
+trainerror = 1-trainaccuracy
+trainerror
+
+testerror = 1-testaccuracy
+testerror
+
+#Sensitivity - TPR
+trainsensitivity = 180/(180 + 54)
+trainsensitivity #0.76
+
+testsensitivity = 45/(45 + 9)
+testsensitivity #0.83
+
+#Specificity
+trainspecificity = (3080)/(3080+227) 
+trainspecificity
+
+testspecificity = 607/(607+54)
+testspecificity
+
+#FPR
+trainFPR = 1-trainspecificity
+trainFPR
+
+testFPR = 1 - testspecificity
+testFPR
+
+#Cut off at 0.1
+blr_confusion_matrix(model = LR.mod, data = train.final, cutoff = 0.1)
+blr_confusion_matrix(model = LR.mod, data = test.final, cutoff = 0.1)
+
+
+#AUC
+#Training
+library(ROCR)
+ROCRpredTrain = prediction(predTrain, train.final$Default)
+auctrain = as.numeric(performance(ROCRpredTrain, "auc")@y.values) 
+auctrain #0.92
+perftrain = performance(ROCRpredTrain, "tpr","fpr")
+plot(perftrain,lwd=3,colorize = TRUE, main = "Train Roc Curve")
+
+#Testing
+ROCRpredTest = prediction(predTest, test.final$Default)
+auctest = as.numeric(performance(ROCRpredTest, "auc")@y.values) 
+auctest # 0.92
+perftest = performance(ROCRpredTest, "tpr","fpr")
+plot(perftest,lwd=3,colorize = TRUE, main = "Test Roc Curve")
+
+
+#KS Chart - Training Data
+K_train = blr_gains_table(LR.mod, data = train.final)
+
+blr_ks_chart(K_train, title = "KS Chart Training Data",
+             yaxis_title = " ",xaxis_title = "Cumulative Population %",
+             ks_line_color = "black")
+
+#KS Chart - Testing Data
+K_test = blr_gains_table(LR.mod, data = test.final)
+
+blr_ks_chart(K_test, title = "KS Chart Testing Data",
+             yaxis_title = " ",xaxis_title = "Cumulative Population %",
+             ks_line_color = "black")
+
+#Gini - Training
+blr_gini_index(LR.mod, data = train.df)
+
+#Gini
+blr_gini_index(LR.mod, data = test.df)
+
+```
+
+##Creating Deciles
+```{r}
+
+#Training Data
+train.final$Pred = predict(object = LR.mod, newdata = train.final, type = "response")
+
+probs=seq(0,1,length=11)
+qs=quantile(train.final$Pred, probs)
+train.final$Deciles=cut(train.final$Pred, unique(qs),include.lowest = TRUE,right=FALSE)
+table(train.final$Deciles)
+
+library(data.table)
+trainDT = data.table(train.final)
+rankTbl = trainDT[, list(
+  cnt = length(Default), 
+  cnt_def = sum(Default==1), 
+  cnt_non_def = sum(Default == 0)
+  ), 
+  by=Deciles][order(-Deciles)]
+
+
+
+rankTbl$rrate = round(rankTbl$cnt_def / rankTbl$cnt,4)*100;
+rankTbl$cum_def = cumsum(rankTbl$cnt_def)
+rankTbl$cum_non_def = cumsum(rankTbl$cnt_non_def)
+rankTbl$cum_rel_def = round(rankTbl$cum_def / sum(rankTbl$cnt_def),4)*100;
+rankTbl$cum_rel_non_def = round(rankTbl$cum_non_def / sum(rankTbl$cnt_non_def),4)*100;
+rankTbl$ks = abs(rankTbl$cum_rel_def - rankTbl$cum_rel_non_def);
+rankTbl$Deciles = c(10,9,8,7,6,5,4,3,2,1)
+print(rankTbl)
+
+#Testing Data
+test.final$Pred = predict(object = LR.mod, newdata = test.final, type = "response")
+
+probs1=seq(0,1,length=11)
+qs=quantile(test.final$Pred, probs1)
+test.final$Deciles=cut(test.final$Pred, unique(qs),include.lowest = TRUE,right=FALSE)
+table(test.final$Deciles)
+
+library(data.table)
+testDT = data.table(test.final)
+test.rankTbl = testDT[, list(
+  cnt = length(Default), 
+  cnt_def = sum(Default==1), 
+  cnt_non_def = sum(Default == 0)
+  ), 
+  by=Deciles][order(-Deciles)]
+
+test.rankTbl$rrate = round(test.rankTbl$cnt_def / test.rankTbl$cnt,4)*100;
+test.rankTbl$cum_def = cumsum(test.rankTbl$cnt_def)
+test.rankTbl$cum_non_def = cumsum(test.rankTbl$cnt_non_def)
+test.rankTbl$cum_rel_def = round(test.rankTbl$cum_def / sum(test.rankTbl$cnt_def),4)*100;
+test.rankTbl$cum_rel_non_def = round(test.rankTbl$cum_non_def / sum(test.rankTbl$cnt_non_def),4)*100;
+test.rankTbl$ks = abs(test.rankTbl$cum_rel_def - test.rankTbl$cum_rel_non_def);
+test.rankTbl$Deciles = c(10,9,8,7,6,5,4,3,2,1)
+print(test.rankTbl)
+
+
+
+```

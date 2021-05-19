@@ -1,0 +1,741 @@
+---
+title: "Appendix-A"
+date: "7/6/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exploratory Data Analysis
+
+## Environment Setup and Data import
+
+### Load necessary Libraries
+```{r}
+library(ggplot2)
+library(caret)
+library(corrplot)
+library(e1071)
+library(DMwR)
+library(dplyr)
+library(car)
+library(class)
+library(lmtest)
+library(pscl)
+library(gbm)          
+library(xgboost)      
+library(ipred)
+library(rpart)
+
+```
+
+### Set up working directory
+```{r}
+
+setwd("E:\\Great Learning_BABI\\06_Machine Learning\\Project- Machine Learning")
+
+```
+
+### Import Dataset
+```{r}
+
+cars = read.csv("Cars_edited.csv", header = T, sep = ",")
+
+```
+
+## Variable Identification
+```{r}
+#Dimensions of the dataset
+dim(cars)
+
+#Top and bottom of the dataset
+head(cars)
+tail(cars)
+
+#Names of the dataset
+names(cars)
+
+#str of the dataset
+str(cars)
+
+#Summary of the dataset
+summary(cars)
+
+#Missing values 
+anyNA(cars)
+
+#No of missing values
+colSums(is.na(cars))
+
+#Converting Variables Gender, Engineer, MBA, License &  Transport to factor variables
+cars$Gender = factor(cars$Gender, levels = c("Male","Female"), labels = c(1,0))
+cars$Engineer = as.factor(cars$Engineer)
+cars$MBA = as.factor(cars$MBA)
+cars$license = as.factor(cars$license)
+cars$Transport = as.factor(cars$Transport)
+
+#Creating a new column with variable Car
+cars$Car = ifelse(cars$Transport == "Car",1,0)
+cars$Car = as.factor(cars$Car)
+
+#Sum of Car users
+table(cars$Car)
+
+round(prop.table(table(cars$Car)),2)
+```
+
+#Imputting Missing value
+```{r}
+
+cars = knnImputation(cars, k = 5)
+
+```
+
+
+#Univariate Analysis
+```{r}
+
+#Age
+summary(cars$Age)
+
+boxplot(cars$Age, horizontal = T, main = "Boxplot of Age", xlab = "Age")
+text(fivenum(cars$Age), labels = fivenum(cars$Age), y = 1.25)
+
+##Outlier Identification
+q1 = quantile(cars$Age,0.25)
+q3 = quantile(cars$Age,0.75)
+IQR = q3 - q1
+
+lwr = q1 - 1.5*IQR
+upr = q3 + 1.5*IQR #age of over 38yrs outliers
+
+##Transport & Age
+ggplot(cars, aes(x = Transport, y = Age)) + geom_boxplot(aes(fill = Transport), alpha = 0.5) + labs(title = "Relationship between Transport & Age")
+
+#Gender
+ggplot(cars, aes(x = Gender)) + geom_bar(fill = "grey") + geom_text(stat = "count",aes(label = ..count..), vjust = -0.25) + labs(title = "Count of Male & Female")
+
+##Transport & Gender
+table(cars$Transport, cars$Gender)
+
+ggplot(cars, aes(x = Gender, fill = Transport)) + geom_bar(position = "dodge", alpha = 0.5) + labs(title = "Relationship between Transport & Gender")
+
+#Engineer
+ggplot(cars, aes(x = Engineer)) + geom_bar(fill = "grey") + geom_text(stat = "count",aes(label = ..count..), vjust = -0.25) + labs(title = "Count of Engineers")
+
+##Transport & Engineer
+table(cars$Transport, cars$Engineer)
+
+ggplot(cars, aes(x = Engineer, fill = Transport)) + geom_bar(position = "dodge", alpha = 0.5) + labs(title = "Relationship between Transport & Engineer")
+
+#MBA
+ggplot(cars, aes(x = MBA)) + geom_bar(fill = "grey") + geom_text(stat = "count",aes(label = ..count..), vjust = -0.25) + labs(title = "Count of MBA")
+
+##Transport & MBA
+table(cars$Transport, cars$MBA)
+
+ggplot(cars, aes(x = MBA, fill = Transport)) + geom_bar(position = "dodge", alpha = 0.5) + labs(title = "Relationship between Transport & MBA")
+
+#Work.Exp
+summary(cars$Work.Exp)
+
+boxplot(cars$Work.Exp, horizontal = T, main = "Boxplot of Work.Exp", xlab = "Work.Exp")
+text(fivenum(cars$Work.Exp), labels = fivenum(cars$Work.Exp), y = 1.25)
+
+##Outlier Identification
+q1 = quantile(cars$Work.Exp,0.25)
+q3 = quantile(cars$Work.Exp,0.75)
+IQR = q3 - q1
+
+lwr = q1 - 1.5*IQR
+upr = q3 + 1.5*IQR #Experience of over 15.5 yrs outliers
+
+
+##Transport & Work.Exp
+ggplot(cars, aes(x = Transport, y = Work.Exp)) + geom_boxplot(aes(fill = Transport), alpha = 0.5) + labs(title = "Relationship between Transport & Work.Exp")
+
+#Salary
+summary(cars$Salary)
+
+boxplot(cars$Salary, horizontal = T, main = "Boxplot of Salary", xlab = "Salary")
+text(fivenum(cars$Salary), labels = fivenum(cars$Salary), y = 1.25, adj = 1)
+
+##Outlier Identification
+q1 = quantile(cars$Salary,0.25)
+q3 = quantile(cars$Salary,0.75)
+IQR = q3 - q1
+
+lwr = q1 - 1.5*IQR
+upr = q3 + 1.5*IQR #Salary of over 24.6  outliers
+
+##Transport & Salary
+ggplot(cars, aes(x = Transport, y = Salary)) + geom_boxplot(aes(fill = Transport), alpha = 0.5) + labs(title = "Relationship between Transport & Salary")
+
+#Distance
+summary(cars$Distance)
+
+boxplot(cars$Distance, horizontal = T, main = "Boxplot of Distance", xlab = "Distance")
+text(fivenum(cars$Distance), labels = fivenum(cars$Distance), y = 1.25)
+
+##Outlier Identification
+q1 = quantile(cars$Distance,0.25)
+q3 = quantile(cars$Distance,0.75)
+IQR = q3 - q1
+
+lwr = q1 - 1.5*IQR
+upr = q3 + 1.5*IQR #Distance of over 20.4  outliers
+
+##Transport & Distance
+ggplot(cars, aes(x = Transport, y = Distance)) + geom_boxplot(aes(fill = Transport), alpha = 0.5) + labs(title = "Relationship between Transport & Gender")
+
+cars %>% group_by(Transport) %>% summarise(count = n(), Avg = mean(Distance))
+
+#License
+ggplot(cars, aes(x = license)) + geom_bar(fill = "grey") + geom_text(stat = "count",aes(label = ..count..), vjust = -0.25) + labs(title = "Count of License holders")
+
+##Transport & License
+table(cars$Transport, cars$license)
+
+ggplot(cars, aes(x = license, fill = Transport)) + geom_bar(position = "dodge", alpha = 0.5) + labs(title = "Relationship between Transport & License") 
+
+#Transport
+ggplot(cars, aes(x = Transport)) + geom_bar(fill = "grey") + geom_text(stat = "count",aes(label = ..count..), vjust = -0.25) + labs(title = "Barplot of Transport")
+
+table(cars$Transport)
+
+#Car
+ggplot(cars, aes(x = Car)) + geom_bar(fill = "grey") + geom_text(stat = "count",aes(label = ..count..), vjust = -0.25) + labs(title = "Barplot of Car")
+
+#Percentages
+# ggplot(tips, aes(x = day, group = sex)) + 
+#   geom_bar(aes(y = ..prop.., fill = factor(..x..)), stat = "count") +
+#   geom_text(aes(label = scales::percent(..prop..), y = ..prop..), stat = "count", vjust = -.5) +
+#   labs(y = "percent", fill = "day") + facet_grid(~sex) + scale_y_continuous(labels = scales::percent)
+
+
+```
+
+##Bi-variate Analysis
+```{r}
+
+#Isolating numeric values and checking relationship between each variable
+
+#[1] Age  [2] Work.Exp    [3] Salary [4] Distance 
+
+num = sapply(cars, is.numeric)
+cars.num  = cars[,num]
+
+#Correlation plot
+round(cor(cars.num),2)
+
+#Observations:
+#A high positive correlation is observed between Age & Work.Exp and Age & Salary.
+#Salary and Work.Exp is highly positively correlated
+#Distance has a moderate positive correlation with Age, Work.Exp & Salary.
+
+#Creating a new dataframe by excluding variable Transport
+cars.wo.transport = cars[-9]
+
+#Isolating Categorical Variables
+#[1] Gender  [2] Engineer    [3] MBA [4] License [5] Car 
+
+cat = sapply(cars.wo.transport, is.factor)
+cars.cat = cars.wo.transport[,cat]
+
+table(cars.cat$Car, cars.cat$Gender)
+table(cars.cat$Car, cars.cat$Engineer)
+table(cars.cat$Car, cars.cat$MBA)
+table(cars.cat$Car, cars.cat$license)
+
+par(mfrow = c(3,2))
+for (i in names(cars.cat)) {
+  print(ggplot(cars.cat, aes(x = cars.cat[[i]])) + geom_bar(aes(fill = Car), alpha = 0.5, position = "dodge") + labs(title = names(cars.cat[i])) + xlab(label = names(cars.cat[i])))  
+}
+
+
+#Chisquare test to check correlation among categorical Variables
+
+chisq.test(cars$Gender, cars$Engineer)
+chisq.test(cars$Gender, cars$MBA)
+chisq.test(cars$Gender, cars$license) 
+chisq.test(cars$Gender, cars$Car)
+
+chisq.test(cars$Engineer, cars$MBA)
+chisq.test(cars$Engineer, cars$license)
+chisq.test(cars$Engineer, cars$Car)
+
+chisq.test(cars$MBA, cars$license)
+chisq.test(cars$MBA, cars$Car)
+
+chisq.test(cars$license, cars$Car)
+
+
+##Observations:
+#Gender is highly dependent with variable License
+#Engineer is independent of every categorical variable
+#Similarly, MBA is independent of every categorical variable
+#License & Car are highly dependent
+
+```
+
+##Multicollinearity Check
+```{r}
+
+corrplot(corr = cor(cars.num), method = "number")
+
+#Building an initial logistic model using all variables
+
+mod = glm(Car~., data = cars.wo.transport, family = "binomial")
+summary(mod)
+
+#Checking for mulitcollinearity
+round(vif(mod),3)
+
+#Observation : Variables Age, Work.Exp & Salary have high VIF scores indicating they are highly correlated independent variables. 
+
+#Removing Variable work.exp and running a logistic regression model again
+
+mod1 = glm(Car ~ Age + Gender + Engineer + MBA + Salary + Distance + license , family = "binomial", data = cars.wo.transport)
+
+summary(mod1)
+
+round(vif(mod1),3)
+
+#All VIF scores are below 2.
+
+```
+
+#Data Preparation - SMOTE
+```{r}
+
+#Splitting dataset into train & test
+set.seed(100)
+index = createDataPartition(cars.wo.transport$Car, p = 0.7, list = FALSE)
+train = cars.wo.transport[index,]
+test  = cars.wo.transport[-index,]
+
+#Dimensions for Train & Test
+dim(train)
+dim(test)
+
+#Checking proportion of cars in original dataset
+table(cars.wo.transport$Car)
+table(train$Car)
+table(test$Car)
+
+prop.table(table(cars$Car))
+prop.table(table(train$Car))
+prop.table(table(test$Car))
+
+#Balancing minority class on training set using SMOTE
+train.cars = SMOTE(Car~., train, perc.over = 100, k = 5, perc.under = 626)
+
+table(train.cars$Car)
+prop.table(table(train.cars$Car))
+```
+
+#Logistic Regression
+```{r}
+
+#Building a Logistic Regression Model
+LR.mod = glm(Car ~ Age + Gender + Engineer + MBA + Salary + Distance + license, family = "binomial", data = train.cars)
+
+summary(LR.mod)
+
+round(vif(LR.mod),3)
+
+#Removing variables that aren't significant
+final.mod = glm(Car ~ Age  + MBA + Distance + license , family = "binomial", data = train.cars)
+
+summary(final.mod)
+
+round(vif(final.mod),3)
+
+
+#Loglikelihood test : To ensure if logit model is valid or not
+
+library(lmtest)
+lrtest(final.mod)
+
+#To get the logit R2 of goodness
+
+library(pscl)
+pR2(final.mod) #MCFadden score is 0.80 indicating goodness of fit is reasonably robust
+
+#Getting the Odds and probability values
+coefficient = round(coef(final.mod),3)
+coefficient
+
+Intercept = exp(coefficient[1])
+Intercept.prob = Intercept/(1+Intercept)
+Intercept.prob
+
+Age = exp(coefficient[2]) 
+Age.prob = Age/(1+Age)
+Age.prob
+
+MBA = exp(coefficient[3])
+MBA.prob = MBA/(1+MBA)
+MBA.prob
+
+Distance = exp(coefficient[4])
+Distance.prob = Distance/(1+Distance)
+Distance.prob
+
+license = exp(coefficient[5])
+license.prob = license/(1+license)
+license.prob
+
+odds = c(Age, MBA, Distance, license)
+odds
+
+prob = odds/(1+odds)
+prob
+
+relativeimportance = odds/(1+odds) * 100
+relativeimportance[order(relativeimportance)]
+
+#Performance on train dataset
+predtrain = predict(object = final.mod, newdata = train.cars, type = "response")
+
+table(train.cars$Car, predtrain>0.5) #96.33% 
+(263+79)/nrow(train.cars)
+
+#Performance on test dataset
+predtest= predict(object = final.mod, newdata = test, type = "response")
+
+table(test$Car, predtest>0.5) #94.69
+(110+15)/nrow(test)
+
+```
+
+##KNN Model
+```{r}
+
+#Normalize variables
+scale = preProcess(train.cars, method = "range")
+
+train.norm.data = predict(scale, train.cars)
+test.norm.data = predict(scale, test)
+
+#Removing factor variable from train & test datasets
+trainKNN = train.norm.data[-9]
+testKNN = test.norm.data[-9]
+
+#Storing target variable for testing and training data
+trainKNN.Label = train.norm.data$Car
+testKNN.Label = test.norm.data$Car
+
+#Model
+knn_fit3 = knn(train = trainKNN, test = testKNN, cl = trainKNN.Label, k = 3, prob = F)
+Knn.tab3 = table(knn_fit3, testKNN.Label)
+Knn.tab3
+(110+13)/nrow(test.norm.data) #93.18
+1-sum(diag(Knn.tab3))/sum(Knn.tab3) #6.8
+
+knn_fit5 = knn(train = trainKNN, test = testKNN, cl = trainKNN.Label, k = 5, prob = F)
+Knn.tab5 = table(knn_fit5, testKNN.Label)
+Knn.tab5
+(109+12)/nrow(test.norm.data) #91.64
+1-sum(diag(Knn.tab5))/sum(Knn.tab5) #8.3
+
+```
+
+##Naive_bayes
+```{r}
+
+#Building model
+naiveBayes.mod = naiveBayes(x = train.norm.data[,c(1:8)], y = train.norm.data[,9])
+
+#Prediction on training data
+predtrain.NB = predict(object = naiveBayes.mod, newdata = train.norm.data[,c(1:8)])
+
+table(predtrain.NB, train.norm.data$Car)
+(259+69)/nrow(train.norm.data) # 92.39
+
+#Prediction on test data
+predtest.NB = predict(object = naiveBayes.mod, newdata = test.norm.data[,c(1:8)])
+
+table(predtest.NB, test.norm.data$Car)
+(111+15)/nrow(test.norm.data) # 95.45%
+
+
+```
+
+##Confusion Matrix for all Models
+```{r}
+
+#Confusion matrix- Logistic Regression 
+#Training Data 
+
+predtrain.LR = ifelse(predtrain>0.5,1,0)
+
+confusionMatrix(as.factor(predtrain.LR), train.cars$Car, positive = "1") #96.34%
+
+#Testing data
+predtest.LR = ifelse(predtest>0.5,1,0)
+
+confusionMatrix(as.factor(predtest.LR), test$Car, positive = "1") #94.7%
+
+#Confusion Matrix - KNN 
+
+confusionMatrix(knn_fit3, test.norm.data$Car, positive = "1") #93.18%
+
+
+#Confusion Matrix - Naive Bayes
+#Training Data
+confusionMatrix(predtrain.NB, train.norm.data$Car, positive = "1") #92.39%
+
+#Testing Data
+
+confusionMatrix(predtest.NB, test.norm.data$Car, positive = "1") #95.45%
+
+#Observations:
+#Naive Bayes performs better as compared to other models.
+
+```
+
+##Bagging
+```{r}
+set.seed(400)
+cars.bagging = bagging(Car~., data = train.cars, 
+                       control=rpart.control(maxdepth=5, minsplit=4))
+
+#Prediction on train 
+baggingpred.train = predict(object = cars.bagging, train.cars)
+
+confusionMatrix(baggingpred.train, train.cars$Car, positive = "1") #99.15
+
+#Prediction on test
+baggingpred.test = predict(object = cars.bagging, test)
+
+confusionMatrix(baggingpred.test, test$Car, positive = "1") #96.97
+
+```
+
+##Boosting
+```{r}
+
+#Building model using Gradient boosting
+GBM.train = train.cars
+GBM.test  = test
+GBM.train$Car = as.numeric(GBM.train$Car)-1
+
+set.seed(100)
+cars.boosting = gbm(formula = Car~., distribution = "bernoulli", data = GBM.train,
+                    n.trees = 50, interaction.depth = 5, shrinkage = 0.1,
+                    cv.folds = 5, verbose = F, n.cores = NULL)
+
+
+
+#Prediction on train 
+boostingpred.train = predict(object = cars.boosting, GBM.train, type = "response", n.trees = 50)
+
+boostingpred.train = as.factor(ifelse(boostingpred.train>0.5,1,0))
+
+confusionMatrix(boostingpred.train, as.factor(GBM.train$Car), positive = "1") #100%
+
+#Prediction on test
+boostingpred.test = predict(object = cars.boosting, GBM.test, type = "response", n.trees = 50)
+
+boostingpred.test = as.factor(ifelse(boostingpred.test>0.5,1,0))
+
+confusionMatrix(boostingpred.test, as.factor(GBM.test$Car), positive = "1") #96.21
+
+#Tuning boosting model using XGboosting
+XGB.train = train.cars
+XGB.test  = test
+
+cars_features_train = as.matrix(XGB.train[,1:8])
+cars_features_test = as.matrix(XGB.test[,1:8])
+cars_label_train = as.matrix(XGB.train[,9])
+
+mode(cars_features_train) = "double"
+mode(cars_features_test) = "double"
+cars_label_train = as.numeric(cars_label_train)
+
+#Building XGBoosting model
+set.seed(200)
+xgb.fit = xgboost(data = cars_features_train, label = cars_label_train, eta = 1, 
+                  max_depth = 15, min_child_weight = 3, nrounds = 5000, nfold = 5,
+                  objective = "binary:logistic", verbose = 0, early_stopping_rounds = 10)
+
+#Prediction on training 
+XGBoosting.predtrain = predict(object = xgb.fit, newdata = cars_features_train)
+
+XGBoosting.predtrain = as.factor(ifelse(XGBoosting.predtrain>0.5,1,0))
+
+confusionMatrix(XGBoosting.predtrain, XGB.train$Car)
+
+#Prediction on testing data
+XGBoosting.predtest = predict(object = xgb.fit, newdata = cars_features_test)
+
+XGBoosting.predtest = as.factor(ifelse(XGBoosting.predtest>0.5,1,0))
+
+confusionMatrix(XGBoosting.predtest, XGB.test$Car, positive = "1")
+
+```
+
+### Tuning XGBoosting parameters
+```{r}
+# #Further tuning of eta in xbg
+# tp_xgb<-vector()
+# lr <- c(0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 1)
+# md<-c(1,3,5,7,9,15)
+# nr<-c(2, 50, 100, 1000, 5000 ,10000)
+# for (i in nr) {
+# 
+# xgb.fit <- xgboost(
+#   data = cars_features_train,
+#   label = cars_label_train,
+#   eta = 1,
+#   max_depth = 15,
+#   nrounds = i,
+#   nfold = 5,
+#   objective = "binary:logistic",  
+#   verbose = 0,               
+#   early_stopping_rounds = 10 
+# )
+# 
+# XGB.test$xgb.pred.class <- predict(xgb.fit, cars_features_test)
+# 
+# tp_xgb<-cbind(tp_xgb,sum(XGB.test$Car==1 & XGB.test$xgb.pred.class>=0.5))
+# 
+# }
+# 
+# tp_xgb
+
+  
+```
+
+#Model Comparision
+```{r}
+
+Model_performance  = data.frame(matrix(NA, nrow = 6, ncol = 7))
+names(Model_performance) = c("Model.Name","Accuracy", "Sensitivity", "Specificity",
+                             "Precision","Misclassification", "F1.Score")
+
+#Logistic Regression
+
+predtest.LR = ifelse(predtest>0.5,1,0)
+
+Logistic.Regression = table(predtest.LR, test$Car)
+Logistic.Regression
+
+##Model Name
+Model_performance[1,1] = "Logistic.Regression"
+##Accuracy
+Model_performance[1,2] = round((Logistic.Regression[1,1] + Logistic.Regression[2,2]) / nrow(test),3) * 100
+##Sensitivity
+Model_performance[1,3] = round((Logistic.Regression[2,2]) / (Logistic.Regression[1,2] + Logistic.Regression[2,2]) * 100,2)
+##Specificity
+Model_performance[1,4] = round((Logistic.Regression[1,1]) / (Logistic.Regression[1,1] + Logistic.Regression[2,1]) * 100,2)
+##Precision
+Model_performance[1,5] = round((Logistic.Regression[2,2]) / (Logistic.Regression[2,2] + Logistic.Regression[2,1]) * 100,2)
+##Misclassification Rate
+Model_performance[1,6] = round(1 - ((Logistic.Regression[1,1] + Logistic.Regression[2,2])/nrow(test)),3) * 100
+##F1 Score
+Model_performance[1,7] = round(2*((Model_performance[1,5] * Model_performance[1,3])/(Model_performance[1,5] + Model_performance[1,3])),2)
+
+#KNN Model
+Knn = table(knn_fit3, testKNN.Label)
+Knn
+
+##Model Name
+Model_performance[2,1] = "KNN"
+##Accuracy
+Model_performance[2,2] = round((Knn[1,1] + Knn[2,2]) / nrow(test),3) * 100
+##Sensitivity
+Model_performance[2,3] = round((Knn[2,2]) / (Knn[1,2] + Knn[2,2]) * 100,2)
+##Specificity
+Model_performance[2,4] = round((Knn[1,1]) / (Knn[1,1] + Knn[2,1]) * 100,2)
+##Precision
+Model_performance[2,5] = round((Knn[2,2]) / (Knn[2,2] + Knn[2,1]) * 100,2)
+##Misclassification Rate
+Model_performance[2,6] = round(1 - ((Knn[1,1] + Knn[2,2])/nrow(test)),3) * 100
+##F1 Score
+Model_performance[2,7] = round(2*((Model_performance[2,5] * Model_performance[2,3])/(Model_performance[2,5] + Model_performance[2,3])),2)
+
+#Naive Bayes
+
+NB = table(predtest.NB, test.norm.data$Car)
+NB
+
+##Model Name
+Model_performance[3,1] = "Naive.Bayes"
+##Accuracy
+Model_performance[3,2] = round((NB[1,1] + NB[2,2]) / nrow(test),3) * 100
+##Sensitivity
+Model_performance[3,3] = round((NB[2,2]) / (NB[1,2] + NB[2,2]) * 100,2)
+##Specificity
+Model_performance[3,4] = round((NB[1,1]) / (NB[1,1] + NB[2,1]) * 100,2)
+##Precision
+Model_performance[3,5] = round((NB[2,2]) / (NB[2,2] + NB[2,1]) * 100,2)
+##Misclassification Rate
+Model_performance[3,6] = round(1 - ((NB[1,1] + NB[2,2])/nrow(test)),3) * 100
+##F1 Score
+Model_performance[3,7] = round(2*((Model_performance[3,5] * Model_performance[3,3])/(Model_performance[3,5] + Model_performance[3,3])),2)
+
+#Bagging
+Bagging = table(baggingpred.test, test$Car)
+Bagging
+
+##Model Name
+Model_performance[4,1] = "Bagging"
+##Accuracy
+Model_performance[4,2] = round((Bagging[1,1] + Bagging[2,2]) / nrow(test),3) * 100
+##Sensitivity
+Model_performance[4,3] = round((Bagging[2,2]) / (Bagging[1,2] + Bagging[2,2]) * 100,2)
+##Specificity
+Model_performance[4,4] = round((Bagging[1,1]) / (Bagging[1,1] + Bagging[2,1]) * 100,2)
+##Precision
+Model_performance[4,5] = round((Bagging[2,2]) / (Bagging[2,2] + Bagging[2,1]) * 100,2)
+##Misclassification Rate
+Model_performance[4,6] = round(1 - ((Bagging[1,1] + Bagging[2,2])/nrow(test)),3) * 100
+##F1 Score
+Model_performance[4,7] = round(2*((Model_performance[4,5] * Model_performance[4,3])/(Model_performance[4,5] + Model_performance[4,3])),2)
+
+#Gradient Boosting
+Gradient.Boosting = table(boostingpred.test, as.factor(GBM.test$Car))
+Gradient.Boosting
+
+##Model Name
+Model_performance[5,1] = "Gradient.Boosting"
+##Accuracy
+Model_performance[5,2] = round((Gradient.Boosting[1,1] + Gradient.Boosting[2,2]) / nrow(test),3) * 100
+##Sensitivity
+Model_performance[5,3] = round((Gradient.Boosting[2,2]) / (Gradient.Boosting[1,2] + Gradient.Boosting[2,2]) * 100,2)
+##Specificity
+Model_performance[5,4] = round((Gradient.Boosting[1,1]) / (Gradient.Boosting[1,1] + Gradient.Boosting[2,1]) * 100,2)
+##Precision
+Model_performance[5,5] = round((Gradient.Boosting[2,2]) / (Gradient.Boosting[2,2] + Gradient.Boosting[2,1]) * 100,2)
+##Misclassification Rate
+Model_performance[5,6] = round(1 - ((Gradient.Boosting[1,1] + Gradient.Boosting[2,2])/nrow(test)),3) * 100
+##F1 Score
+Model_performance[5,7] = round(2*((Model_performance[5,5] * Model_performance[5,3])/(Model_performance[5,5] + Model_performance[5,3])),2)
+
+#XGBoosting
+XGBoosting = table(XGBoosting.predtest, XGB.test$Car)
+XGBoosting
+
+##Model Name
+Model_performance[6,1] = "XGBoosting"
+##Accuracy
+Model_performance[6,2] = round((XGBoosting[1,1] + XGBoosting[2,2]) / nrow(test),3) * 100
+##Sensitivity
+Model_performance[6,3] = round((XGBoosting[2,2]) / (XGBoosting[1,2] + XGBoosting[2,2]) * 100,2)
+##Specificity
+Model_performance[6,4] = round((XGBoosting[1,1]) / (XGBoosting[1,1] + XGBoosting[2,1]) * 100,2)
+##Precision
+Model_performance[6,5] = round((XGBoosting[2,2]) / (XGBoosting[2,2] + XGBoosting[2,1]) * 100,2)
+##Misclassification Rate
+Model_performance[6,6] = round(1 - ((XGBoosting[1,1] + XGBoosting[2,2])/nrow(test)),3) * 100
+##F1 Score
+Model_performance[6,7] = round(2*((Model_performance[6,5] * Model_performance[6,3])/(Model_performance[6,5] + Model_performance[6,3])),2)
+
+Model_performance
+
+```
+
